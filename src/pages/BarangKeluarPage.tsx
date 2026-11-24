@@ -78,8 +78,6 @@ export function BarangKeluarPage() {
     watch,
     setValue,
     reset,
-    setError,
-    formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
     defaultValues: {
