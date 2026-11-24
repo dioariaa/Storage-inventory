@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Plus, Trash2, PackagePlus } from "lucide-react"
+import { PageHeader } from "@/components/common/PageHeader"
 import type { BahanBaku } from "@/types/database"
 
 const schema = z.object({
@@ -122,13 +123,11 @@ export function BarangMasukPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <PackagePlus className="h-6 w-6 text-green-600" />
-          Barang Masuk (IN)
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">Catat penambahan stok bahan baku</p>
-      </div>
+      <PageHeader
+        icon={PackagePlus}
+        title="Barang Masuk (IN)"
+        description="Catat penambahan stok bahan baku"
+      />
 
       {success && (
         <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 text-sm">
@@ -169,7 +168,7 @@ export function BarangMasukPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {fields.map((field, index) => (
-              <div key={field.id} className="flex gap-3 items-end">
+              <div key={field.id} className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-end">
                 <div className="flex-1 space-y-1.5">
                   {index === 0 && <Label>Bahan Baku</Label>}
                   <SearchableSelect
@@ -183,7 +182,7 @@ export function BarangMasukPage() {
                     <p className="text-xs text-destructive">{errors.items[index]?.bahan_baku_id?.message}</p>
                   )}
                 </div>
-                <div className="w-36 space-y-1.5">
+                <div className="w-full sm:w-36 space-y-1.5">
                   {index === 0 && <Label>Jumlah</Label>}
                   <div className="flex items-center gap-1">
                     <Input
@@ -191,6 +190,7 @@ export function BarangMasukPage() {
                       min="0"
                       step="any"
                       placeholder="0"
+                      className="h-11"
                       {...register(`items.${index}.qty`)}
                     />
                     <span className="text-xs text-muted-foreground w-10 shrink-0">
@@ -205,7 +205,7 @@ export function BarangMasukPage() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="text-destructive mb-0.5"
+                  className="text-destructive mb-0.5 self-end h-11 w-11 sm:h-10 sm:w-10"
                   onClick={() => remove(index)}
                   disabled={fields.length === 1}
                 >
@@ -218,6 +218,7 @@ export function BarangMasukPage() {
               type="button"
               variant="outline"
               size="sm"
+              className="h-11 w-full sm:w-auto"
               onClick={() => append({ bahan_baku_id: "", qty: 0 })}
             >
               <Plus className="h-4 w-4 mr-1" />
@@ -229,15 +230,16 @@ export function BarangMasukPage() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
           <Button
             type="button"
             variant="outline"
+            className="h-11 w-full sm:w-auto"
             onClick={() => reset({ tgl_transaksi: today(), catatan: "", items: [{ bahan_baku_id: "", qty: 0 }] })}
           >
             Reset
           </Button>
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button type="submit" className="h-11 w-full sm:w-auto" disabled={mutation.isPending}>
             {mutation.isPending ? "Menyimpan..." : "Simpan Transaksi IN"}
           </Button>
         </div>

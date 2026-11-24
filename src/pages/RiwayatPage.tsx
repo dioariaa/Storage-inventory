@@ -124,90 +124,156 @@ export function RiwayatPage() {
 
       {/* Tabel */}
       <Card>
-        <CardHeader className="py-4 border-b bg-muted/30">
-          <CardTitle className="text-sm font-bold uppercase tracking-wider">
-            Hasil ({isLoading ? "..." : mutasi?.length ?? 0} transaksi)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-y-auto">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-muted/95 backdrop-blur-sm z-10 border-b">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tgl Transaksi</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Waktu Catat</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Bahan Baku</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Jenis</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Qty</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Saldo Sebelum</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Saldo Sesudah</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Sumber</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Catatan</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {isLoading
-                  ? Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}>
-                        {Array.from({ length: 10 }).map((_, j) => (
-                          <td key={j} className="px-4 py-3">
-                            <Skeleton className="h-4 w-full" />
+          <CardHeader className="py-4 border-b bg-muted/30">
+            <CardTitle className="text-sm font-bold uppercase tracking-wider">
+              Hasil ({isLoading ? "..." : mutasi?.length ?? 0} transaksi)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {/* Desktop table */}
+            <div className="hidden lg:block max-h-[600px] overflow-y-auto">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-muted/95 backdrop-blur-sm z-10 border-b">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tgl Transaksi</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Waktu Catat</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Bahan Baku</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Jenis</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Qty</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Saldo Sebelum</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Saldo Sesudah</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Sumber</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Catatan</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {isLoading
+                    ? Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i}>
+                          {Array.from({ length: 10 }).map((_, j) => (
+                            <td key={j} className="px-4 py-3">
+                              <Skeleton className="h-4 w-full" />
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    : mutasi?.length === 0
+                    ? (
+                      <tr>
+                        <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
+                          Tidak ada transaksi ditemukan untuk filter ini.
+                        </td>
+                      </tr>
+                    )
+                    : mutasi?.map((row) => (
+                        <tr key={row.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap text-xs">{formatDate(row.tgl_transaksi)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-muted-foreground text-xs">
+                            {formatDateTime(row.waktu_pencatatan)}
                           </td>
-                        ))}
-                      </tr>
-                    ))
-                  : mutasi?.length === 0
-                  ? (
-                    <tr>
-                      <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
-                        Tidak ada transaksi ditemukan untuk filter ini.
-                      </td>
-                    </tr>
-                  )
-                  : mutasi?.map((row) => (
-                      <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 whitespace-nowrap text-xs">{formatDate(row.tgl_transaksi)}</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground text-xs">
-                          {formatDateTime(row.waktu_pencatatan)}
-                        </td>
-                        <td className="px-4 py-3 font-medium">{row.bahan_baku_nama}</td>
-                        <td className="px-4 py-3 text-center">
-                          <Badge variant={row.jenis === "IN" ? "success" : "destructive"} className="h-5">
-                            {row.jenis}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium tabular-nums">
-                          <span className={row.jenis === "IN" ? "text-green-700" : "text-red-600"}>
-                            {row.jenis === "IN" ? "+" : "-"}{formatNumber(row.qty)} {row.satuan}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right text-muted-foreground tabular-nums text-xs">
-                          {formatNumber(row.saldo_sebelum)} {row.satuan}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                          {formatNumber(row.saldo_sesudah)} {row.satuan}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {TRANSACTION_SOURCE_LABEL[row.sumber] ?? row.sumber}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs max-w-[150px] truncate">
-                          {row.catatan ?? (row.alasan_out ? `Alasan: ${row.alasan_out}` : "-")}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">
-                          {row.created_by_name ?? "-"}
-                        </td>
-                      </tr>
-                    ))}
-              </tbody>
-              </table>
+                          <td className="px-4 py-3 font-medium">{row.bahan_baku_nama}</td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge variant={row.jenis === "IN" ? "success" : "destructive"} className="h-5">
+                              {row.jenis}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium tabular-nums">
+                            <span className={row.jenis === "IN" ? "text-green-700" : "text-red-600"}>
+                              {row.jenis === "IN" ? "+" : "-"}{formatNumber(row.qty)} {row.satuan}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-muted-foreground tabular-nums text-xs">
+                            {formatNumber(row.saldo_sebelum)} {row.satuan}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                            {formatNumber(row.saldo_sesudah)} {row.satuan}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs text-muted-foreground font-medium">
+                              {TRANSACTION_SOURCE_LABEL[row.sumber] ?? row.sumber}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs max-w-[150px] truncate">
+                            {row.catatan ?? (row.alasan_out ? `Alasan: ${row.alasan_out}` : "-")}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                            {row.created_by_name ?? "-"}
+                          </td>
+                        </tr>
+                      ))}
+                </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+
+            {/* Mobile cards */}
+            <div className="lg:hidden max-h-[600px] overflow-y-auto divide-y divide-border">
+              {isLoading
+                ? Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="p-4 space-y-2">
+                      <Skeleton className="h-4 w-1/2" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-1/3" />
+                    </div>
+                  ))
+                : mutasi?.length === 0
+                ? (
+                  <div className="px-4 py-12 text-center text-muted-foreground">
+                    Tidak ada transaksi ditemukan untuk filter ini.
+                  </div>
+                )
+                : mutasi?.map((row, idx) => {
+                    const prevDate = mutasi[idx - 1]?.tgl_transaksi
+                    const showDateHeader = row.tgl_transaksi !== prevDate
+                    return (
+                      <div key={row.id}>
+                        {showDateHeader && (
+                          <div className="px-4 py-2 bg-muted/40 text-xs font-semibold text-muted-foreground sticky top-0 z-10">
+                            {formatDate(row.tgl_transaksi)}
+                          </div>
+                        )}
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-center justify-between min-h-[44px]">
+                            <span className="font-medium text-sm">{row.bahan_baku_nama}</span>
+                            <Badge variant={row.jenis === "IN" ? "success" : "destructive"} className="h-5">
+                              {row.jenis}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between min-h-[44px]">
+                            <span className="text-sm text-muted-foreground">Jumlah</span>
+                            <span className={`text-sm font-medium tabular-nums ${row.jenis === "IN" ? "text-green-700" : "text-red-600"}`}>
+                              {row.jenis === "IN" ? "+" : "-"}{formatNumber(row.qty)} {row.satuan}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between min-h-[44px]">
+                            <span className="text-sm text-muted-foreground">Saldo</span>
+                            <span className="text-sm font-semibold tabular-nums">
+                              {formatNumber(row.saldo_sesudah)} {row.satuan}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between min-h-[44px]">
+                            <span className="text-sm text-muted-foreground">Sumber</span>
+                            <Badge variant="secondary" className="h-5 text-xs">
+                              {TRANSACTION_SOURCE_LABEL[row.sumber] ?? row.sumber}
+                            </Badge>
+                          </div>
+                          {(row.catatan || row.alasan_out) && (
+                            <div className="text-xs text-muted-foreground pt-1">
+                              {row.catatan ?? `Alasan: ${row.alasan_out}`}
+                            </div>
+                          )}
+                          <div className="text-xs text-muted-foreground pt-1">
+                            {formatDateTime(row.waktu_pencatatan)} · {row.created_by_name ?? "-"}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+            </div>
+          </CardContent>
+        </Card>
     </div>
   )
 }

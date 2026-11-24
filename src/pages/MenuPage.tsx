@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Pencil, UtensilsCrossed, Sparkles, Search, AlertTriangle } from "lucide-react"
+import { Plus, Pencil, Trash2, UtensilsCrossed, Sparkles, Search, AlertTriangle } from "lucide-react"
 import { formatRupiah } from "@/lib/utils"
 import type { Menu } from "@/types/database"
 import { TambahMenuWizardModal } from "@/components/menu/TambahMenuWizardModal"
@@ -112,6 +112,25 @@ export function MenuPage() {
       setOpen(false)
     },
   })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("menu").delete().eq("id", id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["menu-list"] })
+      queryClient.invalidateQueries({ queryKey: ["recipe-count-per-menu"] })
+    },
+    onError: (err) => {
+      alert("Gagal menghapus menu: " + String(err))
+    },
+  })
+
+  const handleDelete = (item: Menu) => {
+    if (!confirm(`Hapus menu "${item.nama}"? Akan gagal jika masih ada resep atau riwayat penjualan.`)) return
+    deleteMutation.mutate(item.id)
+  }
 
   // Unique categories
   const categories = Array.from(new Set(menuList?.map((m) => m.kategori).filter(Boolean))) as string[]
@@ -224,8 +243,8 @@ export function MenuPage() {
         </CardContent>
       </Card>
 
-      {/* Data Table */}
-      <Card>
+      {/* Data Table (desktop) */}
+      <Card className="hidden lg:block">
         <CardContent className="p-0">
           <div className="max-h-[600px] overflow-y-auto">
             <div className="overflow-x-auto">
@@ -324,6 +343,101 @@ export function MenuPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Mobile Card List */}
+      <div className="lg:hidden space-y-3">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-9 w-full" />
+              </CardContent>
+            </Card>
+          ))
+        ) : filtered?.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+              Tidak ada menu yang cocok dengan filter.
+            </CardContent>
+          </Card>
+        ) : (
+          filtered?.map((m) => {
+            const rCount = recipeCount?.[m.id] ?? 0
+            const isDup = (nameCounts[m.nama.toLowerCase()] ?? 1) > 1
+            return (
+              <Card key={m.id}>
+                <CardContent className="p-4 space-y-3">
+                  {/* nama + status */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-foreground truncate">{m.nama}</span>
+                        {isDup && (
+                          <Badge variant="warning" className="text-[10px] h-4 px-1.5">
+                            duplikat
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant={m.division === "bar" ? "default" : "outline"}>
+                          {m.division === "bar" ? "Bar" : "Kitchen"}
+                        </Badge>
+                        {m.kategori ? (
+                          <Badge variant="secondary">{m.kategori}</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Tanpa kategori</span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant={m.is_active ? "success" : "secondary"} className="shrink-0">
+                      {m.is_active ? "Aktif" : "Nonaktif"}
+                    </Badge>
+                  </div>
+                  {/* harga + satuan + recipe */}
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="text-base font-bold tabular-nums text-foreground">
+                        {formatRupiah(m.harga)}
+                      </div>
+                      {/* ponytail: menu table has no satuan column; "per porsi" static since harga is per portion. Add satuan col if per-item units needed. */}
+                      <div className="text-xs text-muted-foreground">per porsi</div>
+                    </div>
+                    {rCount > 0 ? (
+                      <Badge variant="success" className="gap-1">{rCount} bahan</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Belum ada resep</Badge>
+                    )}
+                  </div>
+                  {/* actions: touch targets >= 44px */}
+                  {isAdmin && (
+                    <div className="flex gap-2 pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        className="h-11 flex-1"
+                        onClick={() => openEdit(m)}
+                        aria-label={`Edit ${m.nama}`}
+                      >
+                        <Pencil className="h-4 w-4 mr-1.5" /> Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-11 flex-1 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(m)}
+                        disabled={deleteMutation.isPending}
+                        aria-label={`Hapus ${m.nama}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1.5" /> Hapus
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })
+        )}
+      </div>
 
       {/* Edit / Create Modal */}
       <Dialog open={open} onOpenChange={setOpen}>

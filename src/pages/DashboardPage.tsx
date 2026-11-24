@@ -83,6 +83,19 @@ export function DashboardPage() {
     },
   })
 
+  // Fetch menu divisions for mobile card badges (v_mutasi_menu lacks division)
+  const { data: menuDivisions } = useQuery({
+    queryKey: ["menu-divisions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("menu")
+        .select("id, division")
+      if (error) throw error
+      return data as { id: string; division: string }[]
+    },
+  })
+  const divisionMap = new Map(menuDivisions?.map(m => [m.id, m.division] as [string, string]) ?? [])
+
   // Filter mutasi by search string
   const filteredMutasi = mutasi?.filter(m =>
     m.bahan_baku_nama.toLowerCase().includes(searchQuery.toLowerCase())
@@ -190,7 +203,7 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[500px] overflow-y-auto">
-                  <div className="overflow-x-auto">
+                  <div className="hidden lg:block overflow-x-auto">
                     <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 border-b">
                       <tr className="bg-muted/50">
@@ -232,6 +245,33 @@ export function DashboardPage() {
                     </tbody>
                     </table>
                   </div>
+                  {/* Mobile cards */}
+                  <div className="lg:hidden divide-y divide-border">
+                    {loadingMutasi ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="p-3"><Skeleton className="h-12 w-full" /></div>
+                      ))
+                    ) : filteredMutasi?.length === 0 ? (
+                      <div className="py-12 text-center text-muted-foreground">Tidak ada transaksi ditemukan.</div>
+                    ) : (
+                      filteredMutasi?.map((row) => (
+                        <div key={row.id} className="p-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant={row.jenis === "IN" ? "success" : "secondary"} className="text-[10px] uppercase font-bold py-0 h-5">{row.jenis}</Badge>
+                              <p className="text-sm font-semibold truncate">{row.bahan_baku_nama}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{formatDate(row.tgl_transaksi)}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={cn("text-sm font-bold", row.jenis === "IN" ? "text-green-700" : "text-red-600")}>
+                              {row.jenis === "IN" ? "+" : "-"}{formatNumber(row.qty)} {row.satuan}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -245,7 +285,7 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[500px] overflow-y-auto">
-                  <div className="overflow-x-auto">
+                  <div className="hidden lg:block overflow-x-auto">
                     <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 border-b">
                       <tr className="bg-muted/50">
@@ -280,6 +320,31 @@ export function DashboardPage() {
                       )}
                     </tbody>
                     </table>
+                  </div>
+                  {/* Mobile cards */}
+                  <div className="lg:hidden divide-y divide-border">
+                    {loadingMenu ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="p-3"><Skeleton className="h-12 w-full" /></div>
+                      ))
+                    ) : filteredMutasiMenu?.length === 0 ? (
+                      <div className="py-12 text-center text-muted-foreground">Tidak ada penjualan menu ditemukan.</div>
+                    ) : (
+                      filteredMutasiMenu?.map((row, idx) => (
+                        <div key={`${row.penjualan_id}-${row.menu_id}-${idx}`} className="p-3">
+                          <div className="flex items-start justify-between gap-3 mb-1">
+                            <p className="text-sm font-semibold leading-tight">{row.menu_nama}</p>
+                            <Badge variant="secondary" className="text-[10px] shrink-0 uppercase font-bold py-0 h-5">
+                              {divisionMap.get(row.menu_id) ?? "..."}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-muted-foreground">{formatDate(row.tgl_transaksi)} • {row.kategori ?? "-"}</p>
+                            <p className="text-sm font-bold text-green-700">{formatNumber(row.qty_terjual)} porsi</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </CardContent>

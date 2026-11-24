@@ -18,6 +18,7 @@ import type { BahanBaku, OutReason, SaldoBahanBaku } from "@/types/database"
 import { OUT_REASON_LABEL } from "@/types/database"
 import { BarangKeluarPenjualan } from "@/components/barang-keluar/BarangKeluarPenjualan"
 import { BarangKeluarPosGrid } from "@/components/barang-keluar/BarangKeluarPosGrid"
+import { PageHeader } from "@/components/common/PageHeader"
 
 type Mode = "manual" | "penjualan"
 type SubMode = "import" | "grid"
@@ -146,24 +147,24 @@ export function BarangKeluarPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <PackageMinus className="h-6 w-6 text-red-500" />
-          Barang Keluar (OUT)
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">Catat pengurangan stok bahan baku</p>
-      </div>
+      <PageHeader
+        icon={PackageMinus}
+        title="Barang Keluar (OUT)"
+        description="Catat pengurangan stok bahan baku"
+      />
 
       {/* Mode selector */}
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 sm:flex gap-2">
         <Button
           variant={mode === "manual" ? "default" : "outline"}
+          className="h-11"
           onClick={() => setMode("manual")}
         >
           OUT Manual
         </Button>
         <Button
           variant={mode === "penjualan" ? "default" : "outline"}
+          className="h-11"
           onClick={() => setMode("penjualan")}
         >
           Dari Penjualan
@@ -172,15 +173,17 @@ export function BarangKeluarPage() {
 
       {mode === "penjualan" ? (
         <>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 sm:flex gap-2">
             <Button
               variant={subMode === "import" ? "default" : "outline"}
+              className="h-11"
               onClick={() => setSubMode("import")}
             >
               Import POS (File)
             </Button>
             <Button
               variant={subMode === "grid" ? "default" : "outline"}
+              className="h-11"
               onClick={() => setSubMode("grid")}
             >
               POS Grid (Manual)
@@ -246,7 +249,7 @@ export function BarangKeluarPage() {
                   const satuan = getSatuan(selectedId)
                   return (
                     <div key={field.id} className="space-y-1">
-                      <div className="flex gap-3 items-end">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-end">
                         <div className="flex-1 space-y-1.5">
                           {index === 0 && <Label>Bahan Baku</Label>}
                           <SearchableSelect
@@ -257,13 +260,14 @@ export function BarangKeluarPage() {
                             emptyText="Bahan baku tidak ditemukan"
                           />
                         </div>
-                        <div className="w-36 space-y-1.5">
+                        <div className="w-full sm:w-36 space-y-1.5">
                           {index === 0 && <Label>Jumlah</Label>}
                           <div className="flex items-center gap-1">
                             <Input
                               type="number"
                               min="0"
                               step="any"
+                              className="h-11"
                               {...register(`items.${index}.qty`)}
                             />
                             <span className="text-xs text-muted-foreground w-10 shrink-0">{satuan}</span>
@@ -273,7 +277,7 @@ export function BarangKeluarPage() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="text-destructive mb-0.5"
+                          className="text-destructive mb-0.5 self-end h-11 w-11 sm:h-10 sm:w-10"
                           onClick={() => remove(index)}
                           disabled={fields.length === 1}
                         >

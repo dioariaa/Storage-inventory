@@ -212,8 +212,8 @@ export function BarangKeluarPosGrid() {
   ]
 
   return (
-    <div className="w-full overflow-x-auto" style={{ touchAction: "manipulation" }}>
-      <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-4 items-start w-full min-w-[1024px]">
+    <div className="w-full" style={{ touchAction: "manipulation" }}>
+      <div className="grid grid-cols-1 gap-4 items-start w-full lg:grid-cols-[minmax(0,1fr)_340px] lg:min-w-[1024px]">
             {/* ============ KATALOG MENU (kiri, ~70%) ============ */}
             <section className="min-w-0 space-y-4">
 
@@ -421,8 +421,8 @@ export function BarangKeluarPosGrid() {
         </div>
       </section>
 
-      {/* ============ RINCIAN PESANAN (kanan, 340px, sticky) ============ */}
-      <aside className="order-panel w-full min-w-0 lg:sticky lg:top-4 rounded-xl border bg-card overflow-hidden">
+      {/* ============ RINCIAN PESANAN (desktop 340px sticky) ============ */}
+      <aside id="pos-cart-panel" className="order-panel w-full min-w-0 lg:sticky lg:top-4 rounded-xl border bg-card overflow-hidden">
         <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 font-bold text-sm">
             <ShoppingBag className="h-4 w-4" aria-hidden="true" /> Rincian Pesanan
@@ -546,6 +546,25 @@ export function BarangKeluarPosGrid() {
           )}
         </div>
       </aside>
+
+      {/* Bar ringkas pesanan — mobile only */}
+      {cartItems.length > 0 && (
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.08)] px-3 py-2 flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-muted-foreground">{totalItemCount} porsi</p>
+            <p className="font-bold text-primary tabular-nums truncate">{formatRupiah(totalHarga)}</p>
+          </div>
+          <Button
+            type="button"
+            className="h-11 px-4 shrink-0"
+            onClick={() =>
+              document.getElementById("pos-cart-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          >
+            <ShoppingBag className="h-4 w-4" /> Pesanan
+          </Button>
+        </div>
+      )}
       </div>
     </div>
   )

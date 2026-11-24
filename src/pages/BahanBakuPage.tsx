@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Plus, Pencil, Boxes, Search } from "lucide-react"
-import { formatNumber, today } from "@/lib/utils"
+import { formatNumber, today, cn } from "@/lib/utils"
 import type { BahanBaku, SaldoBahanBaku } from "@/types/database"
 import { PageHeader } from "@/components/common/PageHeader"
 
@@ -27,6 +27,15 @@ const schema = z.object({
   division: z.enum(["bar", "kitchen"]),
 })
 type FormData = z.infer<typeof schema>
+
+function Stat({ label, value, className }: { label: string; value: string; className?: string }) {
+  return (
+    <div className="rounded-md bg-muted/50 px-2.5 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={cn("text-sm font-bold tabular-nums", className)}>{value}</p>
+    </div>
+  )
+}
 
 export function BahanBakuPage() {
   const { profile } = useAuthStore()
@@ -44,6 +53,7 @@ export function BahanBakuPage() {
   const [usageFilter, setUsageFilter] = useState<"all" | "used" | "unused">("all")
   const [sortBy, setSortBy] = useState<"nama" | "usage_desc" | "usage_asc">("nama")
   const [openUsage, setOpenUsage] = useState<string | null>(null)
+  const [openUsageMobile, setOpenUsageMobile] = useState<string | null>(null)
 
   const { data: recipes, isLoading: loadingRecipes } = useQuery({
     queryKey: ["recipes-all"],
@@ -257,7 +267,7 @@ export function BahanBakuPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="hidden lg:block">
         <CardContent className="p-0">
           <div className="max-h-[600px] overflow-y-auto">
             <div className="overflow-x-auto">
@@ -371,6 +381,118 @@ export function BahanBakuPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Mobile Card List */}
+      <div className="lg:hidden space-y-3">
+        {isLoading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-3 sm:p-4 space-y-3">
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-4 w-1/3" />
+                  <div className="grid grid-cols-2 gap-2">
+                    {Array.from({ length: 4 }).map((_, j) => (
+                      <Skeleton key={j} className="h-14 w-full" />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          : sorted.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  Tidak ada bahan baku yang cocok dengan pencarian.
+                </CardContent>
+              </Card>
+            )
+            : sorted.map((b) => {
+                const menus = usageMap[b.id] ?? []
+                const lowStock =
+                  b.minimum_stok !== null && b.saldo_akhir <= (b.minimum_stok ?? 0)
+                return (
+                  <Card key={b.id}>
+                    <CardContent className="p-3 sm:p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium leading-tight break-words">{b.nama}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{b.satuan}</p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <Badge variant={b.division === "bar" ? "default" : "secondary"}>
+                            {b.division === "bar" ? "Bar" : "Kitchen"}
+                          </Badge>
+                          <Badge variant={b.is_active ? "success" : "secondary"}>
+                            {b.is_active ? "Aktif" : "Nonaktif"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {menus.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">Belum dipakai di menu</span>
+                        ) : (
+                          <Popover
+                            open={openUsageMobile === b.id}
+                            onOpenChange={(v) => setOpenUsageMobile(v ? b.id : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <button className="inline-flex h-11 items-center gap-1 rounded-full bg-primary/10 px-4 text-xs font-semibold text-primary hover:bg-primary/20">
+                                {menus.length} menu
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-3 space-y-2">
+                              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                                Menu yang memakai {b.nama}
+                              </p>
+                              <div className="max-h-48 overflow-y-auto space-y-1">
+                                {menus.map((m, i) => (
+                                  <div
+                                    key={i}
+                                    className="flex items-center justify-between rounded bg-muted/40 px-2 py-1 text-xs"
+                                  >
+                                    <span className="truncate">{m.nama}</span>
+                                    <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                                      {m.division === "bar" ? "Bar" : "Kitchen"}
+                                    </Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        {b.minimum_stok !== null && (
+                          <span className="text-xs text-muted-foreground">
+                            Min stok: {formatNumber(b.minimum_stok)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <Stat label="Stok Awal" value={formatNumber(b.stok_awal)} />
+                        <Stat label="Total IN" value={`+${formatNumber(b.total_in)}`} className="text-green-700" />
+                        <Stat label="Total OUT" value={`-${formatNumber(b.total_out)}`} className="text-red-600" />
+                        <Stat
+                          label="Saldo Akhir"
+                          value={formatNumber(b.saldo_akhir)}
+                          className={lowStock ? "text-amber-600" : ""}
+                        />
+                      </div>
+
+                      {isAdmin && (
+                        <Button
+                          variant="outline"
+                          className="h-11 w-full"
+                          onClick={() => openEdit(b)}
+                          aria-label={`Edit ${b.nama}`}
+                        >
+                          <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+      </div>
 
       {/* Modal Form */}
       <Dialog open={open} onOpenChange={setOpen}>
