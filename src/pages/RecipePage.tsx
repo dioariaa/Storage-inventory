@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { Plus, Trash2, BookOpen, Pencil, Sparkles } from "lucide-react"
+import { Plus, Trash2, BookOpen, Pencil, Sparkles, Search } from "lucide-react"
 import { formatNumber } from "@/lib/utils"
 import type { Menu, BahanBaku, Recipe } from "@/types/database"
 import { TambahMenuWizardModal } from "@/components/menu/TambahMenuWizardModal"
@@ -40,7 +40,10 @@ export function RecipePage() {
   const [open, setOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null)
+  const [search, setSearch] = useState("")
   const [filterMenuId, setFilterMenuId] = useState("all")
+  const [filterDivision, setFilterDivision] = useState("all")
+  const [filterKategori, setFilterKategori] = useState("all")
 
   const { data: menuList } = useQuery({
     queryKey: ["menu-list"],
@@ -61,14 +64,12 @@ export function RecipePage() {
   })
 
   const { data: recipes, isLoading } = useQuery({
-    queryKey: ["recipes-all", filterMenuId],
+    queryKey: ["recipes-all"],
     queryFn: async () => {
-      let q = supabase
+      const { data, error } = await supabase
         .from("recipe")
         .select("*, bahan_baku(*), menu(*)")
         .order("menu_id")
-      if (filterMenuId !== "all") q = q.eq("menu_id", filterMenuId)
-      const { data, error } = await q
       if (error) throw error
       return data as (RecipeWithBahan & { menu: Menu })[]
     },
@@ -136,8 +137,32 @@ export function RecipePage() {
 
   const getSatuan = (id: string) => bahanList?.find((b) => b.id === id)?.satuan ?? ""
 
+  // Kategori unik dari menu list
+  const categories = Array.from(new Set(menuList?.map((m) => m.kategori).filter(Boolean))) as string[]
+
+  const filteredMenuList = menuList?.filter((m) => {
+    const matchDiv = filterDivision === "all" || m.division === filterDivision
+    const matchKat = filterKategori === "all" || m.kategori === filterKategori
+    return matchDiv && matchKat
+  })
+
+  // Filter: menu terpilih + divisi + kategori + pencarian nama menu
+  const filteredRecipes = recipes?.filter((r) => {
+    const matchMenu = filterMenuId === "all" || r.menu_id === filterMenuId
+    const matchDiv = filterDivision === "all" || r.menu.division === filterDivision
+    const matchKat = filterKategori === "all" || r.menu.kategori === filterKategori
+    const q = search.trim().toLowerCase()
+    const matchSearch = q === "" || r.menu.nama.toLowerCase().includes(q)
+    return matchMenu && matchDiv && matchKat && matchSearch
+  })
+
+  // Menu yang belum punya recipe (untuk Set Recipe Menu)
+  const menuTanpaRecipe = menuList?.filter(
+    (m) => !(recipes?.some((r) => r.menu_id === m.id))
+  )
+
   // Group recipes by menu
-  const grouped = recipes?.reduce<Record<string, (RecipeWithBahan & { menu: Menu })[]>>(
+  const grouped = filteredRecipes?.reduce<Record<string, (RecipeWithBahan & { menu: Menu })[]>>(
     (acc, r) => {
       acc[r.menu_id] = acc[r.menu_id] ?? []
       acc[r.menu_id].push(r)
@@ -160,8 +185,8 @@ export function RecipePage() {
         </div>
         {isAdmin && (
           <div className="flex gap-2">
-            <Button variant="outline" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-1" /> Set Recipe Menu Ada
+            <Button variant="outline" onClick={openCreate} disabled={!menuTanpaRecipe?.length}>
+              <Plus className="h-4 w-4 mr-1" /> Set Recipe ({menuTanpaRecipe?.length ?? 0} menu)
             </Button>
             <Button onClick={() => setWizardOpen(true)} className="gap-1.5">
               <Sparkles className="h-4 w-4 text-amber-300" /> Tambah Menu & Resep
@@ -170,18 +195,68 @@ export function RecipePage() {
         )}
       </div>
 
-      <div className="max-w-xs">
-        <Select value={filterMenuId} onValueChange={setFilterMenuId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Filter menu..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua Menu</SelectItem>
-            {menuList?.map((m) => (
-              <SelectItem key={m.id} value={m.id}>{m.nama}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 min-w-0">
+          <Search
+            className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground pointer-events-none"
+            aria-hidden="true"
+          />
+          <Input
+            type="search"
+            placeholder="Cari nama menu..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-11"
+            aria-label="Cari menu pada recipe"
+          />
+        </div>
+        <div className="w-full sm:w-44 shrink-0">
+          <Select
+            value={filterDivision}
+            onValueChange={(v) => { setFilterDivision(v); setFilterKategori("all"); setFilterMenuId("all") }}
+          >
+            <SelectTrigger className="h-11">
+              <SelectValue placeholder="Divisi" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Divisi</SelectItem>
+              <SelectItem value="bar">Bar</SelectItem>
+              <SelectItem value="kitchen">Kitchen</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-full sm:w-48 shrink-0">
+          <Select
+            value={filterKategori}
+            onValueChange={(v) => { setFilterKategori(v); setFilterMenuId("all") }}
+          >
+            <SelectTrigger className="h-11">
+              <SelectValue placeholder="Kategori" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Kategori</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-full sm:w-64 shrink-0">
+          <Select value={filterMenuId} onValueChange={setFilterMenuId}>
+            <SelectTrigger className="h-11">
+              <SelectValue placeholder="Semua Menu" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Menu</SelectItem>
+              {filteredMenuList?.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.nama}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <span className="self-center text-xs text-muted-foreground whitespace-nowrap">
+          {Object.keys(grouped ?? {}).length} menu punya recipe
+        </span>
       </div>
 
       {isLoading ? (
@@ -222,7 +297,8 @@ export function RecipePage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <table className="text-sm w-full">
+                  <div className="overflow-x-auto">
+                    <table className="text-sm w-full">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left pb-2 font-medium text-muted-foreground">Bahan</th>
@@ -239,7 +315,8 @@ export function RecipePage() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </CardContent>
               </Card>
             )
@@ -269,19 +346,22 @@ export function RecipePage() {
               </div>
             )}
 
-            {!selectedMenu && (
+            {selectedMenu ? (
+              <div className="text-sm font-medium mb-4">Edit Recipe: {selectedMenu.nama}</div>
+            ) : (
               <div className="space-y-1.5">
-                <Label>Menu</Label>
-                <Select value={watchedMenuId} onValueChange={(v) => setValue("menu_id", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih menu..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {menuList?.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>{m.nama}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Menu (Yang belum punya recipe)</Label>
+                <SearchableSelect
+                  value={watchedMenuId}
+                  onChange={(v) => setValue("menu_id", v)}
+                  options={(menuTanpaRecipe ?? []).map((m) => ({
+                    id: m.id,
+                    label: m.nama,
+                    hint: m.kategori ?? m.division,
+                  }))}
+                  placeholder="Pilih menu..."
+                  emptyText="Semua menu sudah punya recipe"
+                />
                 {errors.menu_id && <p className="text-xs text-destructive">{errors.menu_id.message}</p>}
               </div>
             )}

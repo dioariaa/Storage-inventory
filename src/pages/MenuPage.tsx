@@ -24,6 +24,7 @@ const schema = z.object({
   kategori: z.string().optional(),
   harga: z.coerce.number().min(0).optional(),
   is_active: z.boolean(),
+  division: z.enum(["bar", "kitchen"]),
 })
 type FormData = z.infer<typeof schema>
 
@@ -35,6 +36,7 @@ export function MenuPage() {
   const [editItem, setEditItem] = useState<Menu | null>(null)
   const [search, setSearch] = useState("")
   const [filterKategori, setFilterKategori] = useState("all")
+  const [filterDivision, setFilterDivision] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
 
   const { data: menuList, isLoading } = useQuery({
@@ -70,7 +72,7 @@ export function MenuPage() {
 
   const openCreate = () => {
     setEditItem(null)
-    reset({ nama: "", kategori: "", harga: 0, is_active: true })
+    reset({ nama: "", kategori: "", harga: 0, is_active: true, division: "bar" })
     setOpen(true)
   }
 
@@ -81,6 +83,7 @@ export function MenuPage() {
       kategori: item.kategori ?? "",
       harga: item.harga ?? 0,
       is_active: item.is_active,
+      division: item.division ?? "bar",
     })
     setOpen(true)
   }
@@ -92,6 +95,7 @@ export function MenuPage() {
         kategori: data.kategori || null,
         harga: data.harga ? Number(data.harga) : null,
         is_active: data.is_active,
+        division: data.division,
         created_by: profile?.id,
       }
       if (editItem) {
@@ -116,10 +120,11 @@ export function MenuPage() {
     const matchSearch = m.nama.toLowerCase().includes(search.toLowerCase()) ||
       (m.kategori?.toLowerCase() ?? "").includes(search.toLowerCase())
     const matchKat = filterKategori === "all" || m.kategori === filterKategori
+    const matchDiv = filterDivision === "all" || m.division === filterDivision
     const matchStatus = filterStatus === "all" ||
       (filterStatus === "active" && m.is_active) ||
       (filterStatus === "inactive" && !m.is_active)
-    return matchSearch && matchKat && matchStatus
+    return matchSearch && matchKat && matchDiv && matchStatus
   })
 
   // Detect duplicates by name
@@ -191,6 +196,18 @@ export function MenuPage() {
               </Select>
             </div>
             <div className="w-[140px]">
+              <Select value={filterDivision} onValueChange={setFilterDivision}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Divisi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Divisi</SelectItem>
+                  <SelectItem value="bar">Bar</SelectItem>
+                  <SelectItem value="kitchen">Kitchen</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-[140px]">
               <Select value={filterStatus} onValueChange={setFilterStatus}>
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Status" />
@@ -211,11 +228,13 @@ export function MenuPage() {
       <Card>
         <CardContent className="p-0">
           <div className="max-h-[600px] overflow-y-auto">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/95 backdrop-blur-sm z-10 border-b">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nama Menu</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Kategori</th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Divisi</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Harga</th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">Recipe</th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -226,7 +245,7 @@ export function MenuPage() {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: 7 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <Skeleton className="h-4 w-full" />
                         </td>
@@ -235,7 +254,7 @@ export function MenuPage() {
                   ))
                 ) : filtered?.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                       Tidak ada menu yang cocok dengan filter.
                     </td>
                   </tr>
@@ -257,6 +276,11 @@ export function MenuPage() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {m.kategori ? <Badge variant="secondary">{m.kategori}</Badge> : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant={m.division === "bar" ? "default" : "outline"}>
+                            {m.division === "bar" ? "Bar" : "Kitchen"}
+                          </Badge>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">
                           {formatRupiah(m.harga)}
@@ -295,7 +319,8 @@ export function MenuPage() {
                   })
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -326,6 +351,16 @@ export function MenuPage() {
             <div className="space-y-1.5">
               <Label>Harga (Rp)</Label>
               <Input type="number" step="any" {...register("harga")} placeholder="Contoh: 35000" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Divisi</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                {...register("division")}
+              >
+                <option value="bar">Bar</option>
+                <option value="kitchen">Kitchen</option>
+              </select>
             </div>
             <div className="flex items-center gap-2 pt-1">
               <input

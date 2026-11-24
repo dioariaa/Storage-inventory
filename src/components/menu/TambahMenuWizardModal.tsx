@@ -148,6 +148,7 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
               satuan: it.newBahanSatuan.trim(),
               stok_awal: Number(it.newBahanStokAwal) || 0,
               minimum_stok: it.newBahanMinStok !== "" ? Number(it.newBahanMinStok) : null,
+              division: "bar",
               is_active: true,
               created_by: profile?.id,
             } as any)
@@ -173,6 +174,7 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
         .insert({
           nama: namaMenu.trim(),
           kategori: finalKategori || null,
+          division: "bar",
           is_active: true,
           created_by: profile?.id,
         } as any)

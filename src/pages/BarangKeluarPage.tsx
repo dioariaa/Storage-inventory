@@ -17,8 +17,10 @@ import { Plus, Trash2, PackageMinus } from "lucide-react"
 import type { BahanBaku, OutReason, SaldoBahanBaku } from "@/types/database"
 import { OUT_REASON_LABEL } from "@/types/database"
 import { BarangKeluarPenjualan } from "@/components/barang-keluar/BarangKeluarPenjualan"
+import { BarangKeluarPosGrid } from "@/components/barang-keluar/BarangKeluarPosGrid"
 
 type Mode = "manual" | "penjualan"
+type SubMode = "import" | "grid"
 
 const schema = z.object({
   tgl_transaksi: z.string().min(1),
@@ -38,6 +40,7 @@ type FormData = z.infer<typeof schema>
 
 export function BarangKeluarPage() {
   const [mode, setMode] = useState<Mode>("manual")
+  const [subMode, setSubMode] = useState<SubMode>("grid")
   const { profile } = useAuthStore()
   const queryClient = useQueryClient()
   const [success, setSuccess] = useState(false)
@@ -142,7 +145,7 @@ export function BarangKeluarPage() {
   })
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <PackageMinus className="h-6 w-6 text-red-500" />
@@ -168,9 +171,25 @@ export function BarangKeluarPage() {
       </div>
 
       {mode === "penjualan" ? (
-        <BarangKeluarPenjualan />
-      ) : (
         <>
+          <div className="flex gap-2">
+            <Button
+              variant={subMode === "import" ? "default" : "outline"}
+              onClick={() => setSubMode("import")}
+            >
+              Import POS (File)
+            </Button>
+            <Button
+              variant={subMode === "grid" ? "default" : "outline"}
+              onClick={() => setSubMode("grid")}
+            >
+              POS Grid (Manual)
+            </Button>
+          </div>
+          {subMode === "grid" ? <BarangKeluarPosGrid /> : <BarangKeluarPenjualan />}
+        </>
+      ) : (
+        <div className="max-w-2xl space-y-6">
           {success && (
             <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 text-sm">
               ✓ Transaksi barang keluar berhasil disimpan.
@@ -295,7 +314,7 @@ export function BarangKeluarPage() {
               </Button>
             </div>
           </form>
-        </>
+        </div>
       )}
     </div>
   )

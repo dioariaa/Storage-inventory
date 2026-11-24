@@ -88,6 +88,7 @@ export interface BahanBaku {
   stok_awal: number
   minimum_stok: number | null
   is_active: boolean
+  division: 'bar' | 'kitchen'
   created_at: string
   updated_at: string
   created_by: string | null
@@ -99,6 +100,7 @@ export interface Menu {
   kategori: string | null
   harga: number | null
   is_active: boolean
+  division: 'bar' | 'kitchen'
   created_at: string
   updated_at: string
   created_by: string | null
@@ -178,6 +180,7 @@ export interface SaldoBahanBaku {
   stok_awal: number
   minimum_stok: number | null
   is_active: boolean
+  division: 'bar' | 'kitchen'
   total_in: number
   total_out: number
   saldo_akhir: number

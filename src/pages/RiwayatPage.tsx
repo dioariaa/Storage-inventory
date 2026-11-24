@@ -131,7 +131,8 @@ export function RiwayatPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="max-h-[600px] overflow-y-auto">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/95 backdrop-blur-sm z-10 border-b">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tgl Transaksi</th>
@@ -202,7 +203,8 @@ export function RiwayatPage() {
                       </tr>
                     ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </CardContent>
       </Card>

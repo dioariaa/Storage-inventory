@@ -190,7 +190,8 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 border-b">
                       <tr className="bg-muted/50">
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground uppercase text-[10px]">Tgl</th>
@@ -229,7 +230,8 @@ export function DashboardPage() {
                         ))
                       )}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -243,7 +245,8 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 border-b">
                       <tr className="bg-muted/50">
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground uppercase text-[10px]">Tgl</th>
@@ -276,7 +279,8 @@ export function DashboardPage() {
                         ))
                       )}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
               </CardContent>
             </Card>

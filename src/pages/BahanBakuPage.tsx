@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Plus, Pencil, Boxes, Search } from "lucide-react"
 import { formatNumber, today } from "@/lib/utils"
 import type { BahanBaku, SaldoBahanBaku } from "@/types/database"
@@ -23,6 +24,7 @@ const schema = z.object({
   stok_awal: z.coerce.number().min(0),
   minimum_stok: z.coerce.number().min(0).optional(),
   is_active: z.boolean(),
+  division: z.enum(["bar", "kitchen"]),
 })
 type FormData = z.infer<typeof schema>
 
@@ -32,12 +34,31 @@ export function BahanBakuPage() {
   const [open, setOpen] = useState(false)
   const [editItem, setEditItem] = useState<BahanBaku | null>(null)
   const [search, setSearch] = useState("")
+  const [divisionFilter, setDivisionFilter] = useState<"all" | "bar" | "kitchen">("all")
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - 30)
     return d.toISOString().split("T")[0]
   })
   const [dateTo, setDateTo] = useState(today)
+  const [usageFilter, setUsageFilter] = useState<"all" | "used" | "unused">("all")
+  const [sortBy, setSortBy] = useState<"nama" | "usage_desc" | "usage_asc">("nama")
+  const [openUsage, setOpenUsage] = useState<string | null>(null)
+
+  const { data: recipes, isLoading: loadingRecipes } = useQuery({
+    queryKey: ["recipes-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("recipe")
+        .select("bahan_baku_id, menu_id, menu(nama, division)")
+      if (error) throw error
+      return data as unknown as {
+        bahan_baku_id: string
+        menu_id: string
+        menu: { nama: string; division: string } | null
+      }[]
+    },
+  })
 
   const { data: saldoList, isLoading } = useQuery({
     queryKey: ["saldo-bahan-baku", dateFrom, dateTo],
@@ -82,7 +103,7 @@ export function BahanBakuPage() {
 
   const openCreate = () => {
     setEditItem(null)
-    reset({ nama: "", satuan: "", stok_awal: 0, minimum_stok: undefined, is_active: true })
+    reset({ nama: "", satuan: "", stok_awal: 0, minimum_stok: undefined, is_active: true, division: "bar" })
     setOpen(true)
   }
 
@@ -94,6 +115,7 @@ export function BahanBakuPage() {
       stok_awal: item.stok_awal,
       minimum_stok: item.minimum_stok ?? undefined,
       is_active: item.is_active,
+      division: item.division ?? "bar",
     })
     setOpen(true)
   }
@@ -106,6 +128,7 @@ export function BahanBakuPage() {
         stok_awal: data.stok_awal,
         minimum_stok: data.minimum_stok ?? null,
         is_active: data.is_active,
+        division: data.division,
         created_by: profile?.id,
       }
       if (editItem) {
@@ -124,9 +147,39 @@ export function BahanBakuPage() {
     },
   })
 
-  const filtered = saldoList?.filter((b) =>
-    b.nama.toLowerCase().includes(search.toLowerCase())
+  // Peta pemakaian: bahan_baku_id -> list menu yang memakainya
+  const usageMap = (recipes ?? []).reduce<Record<string, { nama: string; division: string }[]>>(
+    (acc, r) => {
+      if (!r.menu) return acc
+      acc[r.bahan_baku_id] = acc[r.bahan_baku_id] ?? []
+      if (!acc[r.bahan_baku_id].some((m) => m.nama === r.menu!.nama)) {
+        acc[r.bahan_baku_id].push(r.menu)
+      }
+      return acc
+    },
+    {}
   )
+
+  const filtered = saldoList?.filter((b) => {
+    const matchSearch = b.nama.toLowerCase().includes(search.toLowerCase())
+    const matchDiv = divisionFilter === "all" || b.division === divisionFilter
+    const usage = usageMap[b.id]?.length ?? 0
+    const matchUsage =
+      usageFilter === "all" ||
+      (usageFilter === "used" && usage > 0) ||
+      (usageFilter === "unused" && usage === 0)
+    return matchSearch && matchDiv && matchUsage
+  })
+
+  const sorted = [...(filtered ?? [])].sort((a, b) => {
+    if (sortBy === "usage_desc") {
+      return (usageMap[b.id]?.length ?? 0) - (usageMap[a.id]?.length ?? 0)
+    }
+    if (sortBy === "usage_asc") {
+      return (usageMap[a.id]?.length ?? 0) - (usageMap[b.id]?.length ?? 0)
+    }
+    return a.nama.localeCompare(b.nama)
+  })
 
   const isAdmin = profile?.role === "admin"
 
@@ -156,7 +209,36 @@ export function BahanBakuPage() {
               className="pl-9 h-10"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={usageFilter}
+              onChange={(e) => setUsageFilter(e.target.value as any)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              aria-label="Filter pemakaian"
+            >
+              <option value="all">Semua Pemakaian</option>
+              <option value="used">Dipakai di menu</option>
+              <option value="unused">Belum dipakai</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              aria-label="Urutkan"
+            >
+              <option value="nama">Urut: Nama</option>
+              <option value="usage_desc">Urut: Paling Banyak Dipakai</option>
+              <option value="usage_asc">Urut: Paling Sedikit Dipakai</option>
+            </select>
+            <select
+              value={divisionFilter}
+              onChange={(e) => setDivisionFilter(e.target.value as any)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="all">Semua Divisi</option>
+              <option value="bar">Bar</option>
+              <option value="kitchen">Kitchen</option>
+            </select>
             <Input
               type="date"
               value={dateFrom}
@@ -178,10 +260,12 @@ export function BahanBakuPage() {
       <Card>
         <CardContent className="p-0">
           <div className="max-h-[600px] overflow-y-auto">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/95 backdrop-blur-sm z-10 border-b">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nama Bahan</th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Dipakai di Menu</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Satuan</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Stok Awal</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total IN</th>
@@ -203,15 +287,51 @@ export function BahanBakuPage() {
                         ))}
                       </tr>
                     ))
-                  : filtered?.length === 0 ? (
+                  : sorted.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                        <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
                           Tidak ada bahan baku yang cocok dengan pencarian.
                         </td>
                       </tr>
-                    ) : filtered?.map((b) => (
+                    )                    : sorted.map((b) => {
+                        const menus = usageMap[b.id] ?? []
+                        return (
                       <tr key={b.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-medium">{b.nama}</td>
+                        <td className="px-4 py-3 text-center">
+                          {menus.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          ) : (
+                            <Popover
+                              open={openUsage === b.id}
+                              onOpenChange={(v) => setOpenUsage(v ? b.id : null)}
+                            >
+                              <PopoverTrigger asChild>
+                                <button className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20">
+                                  {menus.length} menu
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-3 space-y-2">
+                                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                                  Menu yang memakai {b.nama}
+                                </p>
+                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                  {menus.map((m, i) => (
+                                    <div
+                                      key={i}
+                                      className="flex items-center justify-between text-xs rounded px-2 py-1 bg-muted/40"
+                                    >
+                                      <span className="truncate">{m.nama}</span>
+                                      <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                        {m.division === "bar" ? "Bar" : "Kitchen"}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">{b.satuan}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{formatNumber(b.stok_awal)}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-green-700">+{formatNumber(b.total_in)}</td>
@@ -243,9 +363,11 @@ export function BahanBakuPage() {
                           </td>
                         )}
                       </tr>
-                    ))}
+                    )
+                  })}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -283,6 +405,16 @@ export function BahanBakuPage() {
                 <Label>Minimum Stok (opsional)</Label>
                 <Input type="number" min="0" step="any" {...register("minimum_stok")} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Divisi</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                {...register("division")}
+              >
+                <option value="bar">Bar</option>
+                <option value="kitchen">Kitchen</option>
+              </select>
             </div>
             <div className="flex items-center gap-2">
               <input
