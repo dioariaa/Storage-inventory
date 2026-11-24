@@ -180,15 +180,7 @@ export function BarangKeluarPenjualan() {
 
           const lowerName = rawMenuName.toLowerCase()
 
-          // Cek apakah item adalah makanan / kitchen
-          const isKitchen = KITCHEN_KEYWORDS.some((k) => lowerName.includes(k))
-
-          if (isKitchen) {
-            kitchen.push({ nama: rawMenuName, qty: rawQty })
-            continue
-          }
-
-          // Cari kecocokan di Master Menu
+          // Cari kecocokan di Master Menu (Bar & Kitchen)
           let matchedMenu = menuList?.find(
             (m) => m.nama.toLowerCase() === lowerName
           )
@@ -212,9 +204,16 @@ export function BarangKeluarPenjualan() {
               menu_nama: matchedMenu.nama,
               qty_terjual: rawQty,
               matched: true,
+              isKitchen: matchedMenu.division === "kitchen",
             })
           } else {
-            unrecognized.push(rawMenuName)
+            // Tidak ada di master menu — catat sebagai makanan/dapur bila cocok keyword
+            const isKitchen = KITCHEN_KEYWORDS.some((k) => lowerName.includes(k))
+            if (isKitchen) {
+              kitchen.push({ nama: rawMenuName, qty: rawQty })
+            } else {
+              unrecognized.push(rawMenuName)
+            }
           }
         }
 
@@ -418,7 +417,7 @@ export function BarangKeluarPenjualan() {
                 <div className="space-y-4 pt-2">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                      <p className="text-xs text-green-700 font-semibold">Menu Bar Terdeteksi</p>
+                      <p className="text-xs text-green-700 font-semibold">Menu Terdeteksi (Bar &amp; Kitchen)</p>
                       <p className="text-xl font-bold text-green-800">{saleItems.length} menu</p>
                       <p className="text-xs text-green-600 mt-0.5">
                         Total {saleItems.reduce((acc, s) => acc + s.qty_terjual, 0)} porsi terjual
@@ -427,16 +426,16 @@ export function BarangKeluarPenjualan() {
 
                     <div className="bg-slate-50 border border-slate-200 rounded-md p-3">
                       <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1">
-                        <Utensils className="h-3.5 w-3.5" /> Item Dapur / Non-Bar
+                        <Utensils className="h-3.5 w-3.5" /> Makanan di Luar Master Menu
                       </p>
                       <p className="text-xl font-bold text-slate-700">{kitchenItems.length} menu</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Otomatis diabaikan untuk stok Bar</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Tidak terdaftar, otomatis diabaikan</p>
                     </div>
 
                     <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
                       <p className="text-xs text-amber-800 font-semibold">Tidak Dikenali</p>
                       <p className="text-xl font-bold text-amber-900">{unmapped.length} item</p>
-                      <p className="text-xs text-amber-700 mt-0.5">Bukan menu Bar yang terdaftar</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Bukan menu yang terdaftar</p>
                     </div>
                   </div>
 
@@ -444,7 +443,7 @@ export function BarangKeluarPenjualan() {
                   {saleItems.length > 0 && (
                     <div className="border rounded-md overflow-hidden">
                       <div className="bg-muted/40 px-3 py-2 text-xs font-semibold border-b">
-                        Daftar Menu Bar yang Akan Dihitung Konsumsi Bahan:
+                        Daftar Menu yang Akan Dihitung Konsumsi Bahan (Bar &amp; Kitchen):
                       </div>
                       <div className="max-h-56 overflow-y-auto">
                         <table className="w-full text-xs">
@@ -452,6 +451,11 @@ export function BarangKeluarPenjualan() {
                             {saleItems.map((item, idx) => (
                               <tr key={idx} className="border-b last:border-0 hover:bg-muted/20">
                                 <td className="py-2 px-3 font-medium">{item.menu_nama}</td>
+                                <td className="py-2 px-3">
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {item.isKitchen ? "Kitchen" : "Bar"}
+                                  </Badge>
+                                </td>
                                 <td className="py-2 px-3 text-right">
                                   <Badge variant="outline">{item.qty_terjual} terjual</Badge>
                                 </td>
