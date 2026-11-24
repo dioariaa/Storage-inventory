@@ -8,7 +8,6 @@ import {
   BookOpen,
   History,
   LogOut,
-  Coffee,
   Menu,
   Sparkles,
   X,
@@ -73,7 +72,7 @@ export function Sidebar({ open, onClose }: SidebarProps = {}) {
       >
         {/* Logo */}
         <div className="flex items-center gap-2 px-4 py-5 border-b">
-          <Coffee className="h-6 w-6 text-primary shrink-0" />
+          <img src="/logo-square.jpg" alt="Logo Berlaris" className="h-10 w-10 rounded object-contain shrink-0" />
           {!collapsed && (
             <div className="overflow-hidden">
               <p className="text-sm font-bold text-primary leading-tight">Berlaris</p>

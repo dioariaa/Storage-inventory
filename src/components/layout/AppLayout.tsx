@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Outlet, useLocation } from "react-router-dom"
-import { Coffee, Menu } from "lucide-react"
+import { Menu } from "lucide-react"
 import { Sidebar } from "./Sidebar"
 import { Button } from "@/components/ui/button"
 
@@ -29,7 +29,7 @@ export function AppLayout() {
           >
             <Menu className="h-6 w-6" />
           </Button>
-          <Coffee className="h-5 w-5 text-primary shrink-0" />
+          <img src="/logo-square.jpg" alt="Logo Berlaris" className="h-7 w-7 rounded object-contain shrink-0" />
           <span className="text-sm font-bold text-primary truncate">Inventori Berlaris</span>
         </header>
 
