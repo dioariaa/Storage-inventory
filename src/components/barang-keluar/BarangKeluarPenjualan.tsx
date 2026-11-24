@@ -106,7 +106,68 @@ export function BarangKeluarPenjualan() {
     },
   })
 
-  // Smart POS parser
+  // Fuzzy matching helpers
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/&/g, " and ").replace(/-/g, " ").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
+
+  const getTokens = (s: string) => {
+    const n = normalize(s)
+    const tokens = n.split(" ").filter((w) => w.length > 0)
+    // synonyms
+    const has = (w: string) => tokens.includes(w)
+    if (has("rice") && has("bowl")) {
+      tokens.splice(tokens.indexOf("rice"), 1)
+      tokens.splice(tokens.indexOf("bowl"), 1)
+      tokens.push("nasi")
+    }
+    if (has("wings")) {
+      tokens[tokens.indexOf("wings")] = "wing"
+    }
+    if (has("bihun") && has("goreng")) {
+      // keep both
+    }
+    return tokens
+  }
+
+  const tokenScore = (a: string, b: string) => {
+    const ta = new Set(getTokens(a))
+    const tb = new Set(getTokens(b))
+    const inter = new Set([...ta].filter((x) => tb.has(x)))
+    return inter.size / Math.min(ta.size, tb.size)
+  }
+
+  const findBestMenuMatch = (rawName: string): Menu | undefined => {
+    if (!menuList || menuList.length === 0) return undefined
+    const n = normalize(rawName)
+
+    // 1. Exact
+    let m = menuList.find((x) => normalize(x.nama) === n)
+    if (m) return m
+
+    // 2. ALIAS_MAP
+    const aliasTarget = ALIAS_MAP[n]
+    if (aliasTarget) {
+      m = menuList.find((x) => normalize(x.nama) === normalize(aliasTarget))
+      if (m) return m
+    }
+
+    // 3. Substring
+    m = menuList.find((x) => normalize(x.nama).includes(n) || n.includes(normalize(x.nama)))
+    if (m) return m
+
+    // 4. Token overlap threshold
+    let best: Menu | undefined
+    let bestScore = 0
+    for (const x of menuList) {
+      const sc = tokenScore(rawName, x.nama)
+      if (sc > bestScore) {
+        bestScore = sc
+        best = x
+      }
+    }
+    if (best && bestScore >= 0.5) return best
+    return undefined
+  }
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -178,25 +239,8 @@ export function BarangKeluarPenjualan() {
 
           if (!rawMenuName || rawQty <= 0) continue
 
-          const lowerName = rawMenuName.toLowerCase()
-
-          // Cari kecocokan di Master Menu (Bar & Kitchen)
-          let matchedMenu = menuList?.find(
-            (m) => m.nama.toLowerCase() === lowerName
-          )
-
-          // Cek via ALIAS jika belum ketemu
-          if (!matchedMenu && ALIAS_MAP[lowerName]) {
-            const aliasTarget = ALIAS_MAP[lowerName].toLowerCase()
-            matchedMenu = menuList?.find((m) => m.nama.toLowerCase() === aliasTarget)
-          }
-
-          // Cek partial match jika belum ketemu
-          if (!matchedMenu) {
-            matchedMenu = menuList?.find(
-              (m) => m.nama.toLowerCase().includes(lowerName) || lowerName.includes(m.nama.toLowerCase())
-            )
-          }
+          // Cari kecocokan di Master Menu (Bar & Kitchen) via fuzzy matching
+          const matchedMenu = findBestMenuMatch(rawMenuName)
 
           if (matchedMenu) {
             barSales.push({
@@ -208,6 +252,7 @@ export function BarangKeluarPenjualan() {
             })
           } else {
             // Tidak ada di master menu — catat sebagai makanan/dapur bila cocok keyword
+            const lowerName = rawMenuName.toLowerCase()
             const isKitchen = KITCHEN_KEYWORDS.some((k) => lowerName.includes(k))
             if (isKitchen) {
               kitchen.push({ nama: rawMenuName, qty: rawQty })
