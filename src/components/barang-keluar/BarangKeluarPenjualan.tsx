@@ -467,7 +467,7 @@ export function BarangKeluarPenjualan() {
                   {kitchenItems.length > 0 && (
                     <div className="text-xs bg-muted/20 border rounded-md p-3 text-muted-foreground">
                       <span className="font-semibold text-foreground">
-                        Item Dapur / Makanan ({kitchenItems.length}) diabaikan dari inventory Bar:
+                        Item Dapur / Makanan ({kitchenItems.length}) diabaikan dari inventori Berlaris:
                       </span>{" "}
                       {kitchenItems.map((k) => `${k.nama} (${k.qty})`).join(", ")}
                     </div>
@@ -564,7 +564,7 @@ export function BarangKeluarPenjualan() {
               <Badge variant="outline">{preview.length} jenis bahan baku keluar</Badge>
             </CardTitle>
             <CardDescription>
-              Di bawah adalah total bahan baku yang akan dipotong dari saldo inventory Divisi Bar. Periksa saldo sebelum melakukan posting transaksi.
+              Di bawah adalah total bahan baku yang akan dipotong dari saldo inventori Berlaris. Periksa saldo sebelum melakukan posting transaksi.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

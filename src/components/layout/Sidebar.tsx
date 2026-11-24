@@ -77,7 +77,7 @@ export function Sidebar({ open, onClose }: SidebarProps = {}) {
           {!collapsed && (
             <div className="overflow-hidden">
               <p className="text-sm font-bold text-primary leading-tight">Berlaris</p>
-              <p className="text-xs text-muted-foreground leading-tight">Inventory Bar</p>
+              <p className="text-xs text-muted-foreground leading-tight">Inventori Berlaris</p>
             </div>
           )}
           {open !== undefined && (

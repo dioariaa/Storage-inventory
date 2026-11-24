@@ -65,7 +65,7 @@ export function LoginPage() {
           </div>
           <CardTitle className="text-2xl">Berlaris Kopi & Resto</CardTitle>
           <CardDescription>
-            {isRegister ? "Daftar Akun Pengguna Baru" : "Sistem Inventory Divisi Bar"}
+            {isRegister ? "Daftar Akun Pengguna Baru" : "Sistem Inventori Berlaris"}
           </CardDescription>
         </CardHeader>
         <CardContent>

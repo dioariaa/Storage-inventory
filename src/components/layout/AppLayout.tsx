@@ -30,7 +30,7 @@ export function AppLayout() {
             <Menu className="h-6 w-6" />
           </Button>
           <Coffee className="h-5 w-5 text-primary shrink-0" />
-          <span className="text-sm font-bold text-primary truncate">Berlaris Inventory</span>
+          <span className="text-sm font-bold text-primary truncate">Inventori Berlaris</span>
         </header>
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
