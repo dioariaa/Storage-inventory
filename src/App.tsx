@@ -11,6 +11,7 @@ import { BahanBakuPage } from "@/pages/BahanBakuPage"
 import { MenuPage } from "@/pages/MenuPage"
 import { RecipePage } from "@/pages/RecipePage"
 import { RiwayatPage } from "@/pages/RiwayatPage"
+import { RekapMutasiPage } from "@/pages/RekapMutasiPage"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,6 +38,7 @@ export default function App() {
                 <Route path="barang-masuk" element={<BarangMasukPage />} />
                 <Route path="barang-keluar" element={<BarangKeluarPage />} />
                 <Route path="riwayat" element={<RiwayatPage />} />
+                <Route path="rekap-mutasi" element={<RekapMutasiPage />} />
 
                 {/* Admin-only routes */}
                 <Route element={<AdminRoute />}>

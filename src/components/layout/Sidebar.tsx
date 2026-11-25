@@ -11,6 +11,7 @@ import {
   Menu,
   Sparkles,
   X,
+  Calendar,
 } from "lucide-react"
 import { useState } from "react"
 import { useAuthStore } from "@/stores/authStore"
@@ -25,6 +26,7 @@ const navItems = [
   { to: "/bahan-baku", icon: Boxes, label: "Bahan Baku", adminOnly: true },
   { to: "/menu", icon: UtensilsCrossed, label: "Menu", adminOnly: true },
   { to: "/recipe", icon: BookOpen, label: "Recipe", adminOnly: true },
+  { to: "/rekap-mutasi", icon: Calendar, label: "Rekap Mutasi", adminOnly: true },
   { to: "/riwayat", icon: History, label: "Riwayat" },
 ]
 
