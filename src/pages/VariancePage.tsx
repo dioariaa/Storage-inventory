@@ -205,14 +205,14 @@ export function VariancePage() {
     const h1: (string | number)[] = ["NO", "ITEM (PORSI)", "STOC"]
     const h2: (string | number)[] = ["", "", ""]
     dateGroups.forEach((g) => {
-      h1.push(fmtDate(g.date), "", "", "")
-      h2.push("IN MANUAL", "OUT MANUAL", "IN SISTEM", "OUT MUTASI")
+      h1.push(fmtDate(g.date), "", "", "", "", "", "")
+      h2.push("IN MANUAL", "OUT MANUAL", "IN SISTEM", "OUT SISTEM", "SELISIH IN", "SELISIH OUT", "SELISIH STOK")
     })
     const aoa1: (string | number)[][] = [h1, h2]
     rows.forEach((r, i) => {
       const row: (string | number)[] = [i + 1, r.bahan?.nama ?? r.fileRow.nama, r.fileRow.stoc]
       r.calc.tl.forEach((t) => {
-        row.push(t.mIn, t.mOut, t.sIn, t.sOut)
+        row.push(t.mIn, t.mOut, t.sIn, t.sOut, t.mIn - t.sIn, t.mOut - t.sOut, t.varHari)
       })
       aoa1.push(row)
     })
@@ -223,15 +223,15 @@ export function VariancePage() {
       { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
     ]
     dateGroups.forEach((_, idx) => {
-      const base = 3 + idx * 4
-      merges.push({ s: { r: 0, c: base }, e: { r: 0, c: base + 3 } })
+      const base = 3 + idx * 7
+      merges.push({ s: { r: 0, c: base }, e: { r: 0, c: base + 6 } })
     })
     ws1["!merges"] = merges
     ws1["!cols"] = [
       { wch: 5 },
       { wch: 30 },
       { wch: 10 },
-      ...dateGroups.flatMap(() => [{ wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }]),
+      ...dateGroups.flatMap(() => Array(7).fill({ wch: 11 })),
     ]
     xlsxUtils.book_append_sheet(wb, ws1, "mutasi manual vs sistem")
 
@@ -245,8 +245,10 @@ export function VariancePage() {
         "IN MANUAL",
         "OUT MANUAL",
         "IN SISTEM",
-        "OUT MUTASI",
-        "VAR HARI",
+        "OUT SISTEM",
+        "SELISIH IN",
+        "SELISIH OUT",
+        "SELISIH STOK",
         "SALDO MANUAL",
         "SALDO SISTEM",
         "VARIANCE",
@@ -266,6 +268,8 @@ export function VariancePage() {
           t.mOut,
           t.sIn,
           t.sOut,
+          t.mIn - t.sIn,
+          t.mOut - t.sOut,
           t.varHari,
           t.manualBal,
           t.sistemBal,
@@ -276,7 +280,7 @@ export function VariancePage() {
     const ws2 = xlsxUtils.aoa_to_sheet(aoa2)
     ws2["!cols"] = [
       { wch: 5 }, { wch: 30 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-      { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      { wch: 12 }, { wch: 12 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
     ]
     xlsxUtils.book_append_sheet(wb, ws2, "variance detail")
 
@@ -479,6 +483,7 @@ export function VariancePage() {
                                       <th className="p-2 text-left" rowSpan={2}>Tanggal</th>
                                       <th className="p-2 text-center border-l" colSpan={2}>IN</th>
                                       <th className="p-2 text-center border-l" colSpan={2}>OUT</th>
+                                      <th className="p-2 text-center border-l text-sky-600" colSpan={3}>Selisih</th>
                                       <th className="p-2 text-center border-l" colSpan={2}>Balance</th>
                                       <th className="p-2 text-right border-l" rowSpan={2}>Variance</th>
                                     </tr>
@@ -487,6 +492,9 @@ export function VariancePage() {
                                       <th className="p-2 text-right">Manual</th>
                                       <th className="p-2 text-right border-l">Sistem</th>
                                       <th className="p-2 text-right">Manual</th>
+                                      <th className="p-2 text-right border-l">IN</th>
+                                      <th className="p-2 text-right">OUT</th>
+                                      <th className="p-2 text-right">STOK</th>
                                       <th className="p-2 text-right border-l">Sistem</th>
                                       <th className="p-2 text-right">Manual</th>
                                     </tr>
@@ -496,6 +504,9 @@ export function VariancePage() {
                                       const inDiff = t.sIn !== t.mIn
                                       const outDiff = t.sOut !== t.mOut
                                       const balDiff = t.varBal !== 0
+                                      const sInDiff = t.mIn - t.sIn !== 0
+                                      const sOutDiff = t.mOut - t.sOut !== 0
+                                      const sStokDiff = t.varHari !== 0
                                       return (
                                         <tr key={t.date} className={t.isCount || balDiff ? "font-medium" : ""}>
                                           <td className="p-2 whitespace-nowrap">
@@ -515,6 +526,15 @@ export function VariancePage() {
                                           </td>
                                           <td className={"p-2 text-right tabular-nums " + (outDiff ? "text-rose-600 font-semibold" : "")}>
                                             {t.mOut > 0 ? fmt(t.mOut) : "-"}
+                                          </td>
+                                          <td className={"p-2 text-right tabular-nums border-l " + (sInDiff ? "text-rose-600 font-semibold" : "")}>
+                                            {t.mIn - t.sIn !== 0 ? (t.mIn - t.sIn > 0 ? `+${fmt(t.mIn - t.sIn)}` : fmt(t.mIn - t.sIn)) : "-"}
+                                          </td>
+                                          <td className={"p-2 text-right tabular-nums " + (sOutDiff ? "text-rose-600 font-semibold" : "")}>
+                                            {t.mOut - t.sOut !== 0 ? (t.mOut - t.sOut > 0 ? `+${fmt(t.mOut - t.sOut)}` : fmt(t.mOut - t.sOut)) : "-"}
+                                          </td>
+                                          <td className={"p-2 text-right tabular-nums " + (sStokDiff ? "text-rose-600 font-semibold" : "")}>
+                                            {t.varHari !== 0 ? (t.varHari > 0 ? `+${fmt(t.varHari)}` : fmt(t.varHari)) : "-"}
                                           </td>
                                           <td className={"p-2 text-right tabular-nums border-l " + (balDiff ? "text-rose-600 font-semibold" : "")}>
                                             {fmt(t.sistemBal)}
