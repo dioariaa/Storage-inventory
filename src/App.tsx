@@ -12,6 +12,7 @@ import { MenuPage } from "@/pages/MenuPage"
 import { RecipePage } from "@/pages/RecipePage"
 import { RiwayatPage } from "@/pages/RiwayatPage"
 import { RekapMutasiPage } from "@/pages/RekapMutasiPage"
+import { VariancePage } from "@/pages/VariancePage"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="barang-keluar" element={<BarangKeluarPage />} />
                 <Route path="riwayat" element={<RiwayatPage />} />
                 <Route path="rekap-mutasi" element={<RekapMutasiPage />} />
+                <Route path="variance" element={<VariancePage />} />
 
                 {/* Admin-only routes */}
                 <Route element={<AdminRoute />}>

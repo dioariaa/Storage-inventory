@@ -12,6 +12,7 @@ import {
   Sparkles,
   X,
   Calendar,
+  Scale,
 } from "lucide-react"
 import { useState } from "react"
 import { useAuthStore } from "@/stores/authStore"
@@ -27,6 +28,7 @@ const navItems = [
   { to: "/menu", icon: UtensilsCrossed, label: "Menu", adminOnly: true },
   { to: "/recipe", icon: BookOpen, label: "Recipe", adminOnly: true },
   { to: "/rekap-mutasi", icon: Calendar, label: "Rekap Mutasi", adminOnly: true },
+  { to: "/variance", icon: Scale, label: "Cek Variance", adminOnly: true },
   { to: "/riwayat", icon: History, label: "Riwayat" },
 ]
 
