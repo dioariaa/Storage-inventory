@@ -1,17 +1,25 @@
 import { useEffect, useState } from "react"
-import { Outlet, useLocation } from "react-router-dom"
-import { Menu } from "lucide-react"
+import { Outlet, useLocation, useNavigate } from "react-router-dom"
+import { Menu, LogOut } from "lucide-react"
 import { Sidebar } from "./Sidebar"
 import { Button } from "@/components/ui/button"
+import { useAuthStore } from "@/stores/authStore"
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { signOut } = useAuthStore()
 
   // Tutup drawer saat pindah halaman
   useEffect(() => {
     setSidebarOpen(false)
   }, [location.pathname])
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate("/login")
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -19,7 +27,7 @@ export function AppLayout() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar mobile */}
-        <header className="lg:hidden flex items-center gap-3 h-14 px-3 bg-white border-b border-border sticky top-0 z-30">
+        <header className="lg:hidden flex items-center gap-2 h-14 px-3 bg-white border-b border-border sticky top-0 z-30">
           <Button
             variant="ghost"
             size="icon"
@@ -30,7 +38,16 @@ export function AppLayout() {
             <Menu className="h-6 w-6" />
           </Button>
           <img src="/logo-square.jpg" alt="Logo Berlaris" className="h-7 w-7 rounded object-contain shrink-0" />
-          <span className="text-sm font-bold text-primary truncate">Inventori Berlaris</span>
+          <span className="text-sm font-bold text-primary truncate flex-1">Inventori Berlaris</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 text-muted-foreground hover:text-destructive"
+            onClick={handleSignOut}
+            aria-label="Keluar"
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
         </header>
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden">

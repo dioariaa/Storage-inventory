@@ -63,7 +63,7 @@ export function RecipePage() {
     },
   })
 
-  const { data: recipes, isLoading } = useQuery({
+  const { data: recipes, isLoading, refetch } = useQuery({
     queryKey: ["recipes-all"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -73,6 +73,8 @@ export function RecipePage() {
       if (error) throw error
       return data as (RecipeWithBahan & { menu: Menu })[]
     },
+    staleTime: 0, // Selalu ambil data fresh saat masuk halaman
+    refetchOnMount: true,
   })
 
   const {
