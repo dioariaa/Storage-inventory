@@ -1,6 +1,6 @@
 import { useState, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { read as xlsxRead, utils as xlsxUtils } from "xlsx"
+import { read as xlsxRead, utils as xlsxUtils } from "xlsx-js-style"
 import { supabase } from "@/lib/supabase"
 import { today, formatNumber } from "@/lib/utils"
 import { useAuthStore } from "@/stores/authStore"

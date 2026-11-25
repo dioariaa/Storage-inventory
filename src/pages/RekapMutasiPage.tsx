@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/components/common/PageHeader"
-import { utils as xlsxUtils, writeFile as xlsxWriteFile } from "xlsx"
+import * as XLSX from "xlsx-js-style"
 import { FileDown, Calendar } from "lucide-react"
 import { today } from "@/lib/utils"
 
@@ -142,7 +142,7 @@ export function RekapMutasiPage() {
       aoa.push(dataRow)
     })
 
-    const ws = xlsxUtils.aoa_to_sheet(aoa)
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
     const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [
       { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, // NO
       { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }, // ITEM (PORSI)
@@ -155,9 +155,9 @@ export function RekapMutasiPage() {
     ws["!merges"] = merges
     ws["!cols"] = [{ wch: 5 }, { wch: 30 }, { wch: 10 }, ...dates.flatMap(() => [{ wch: 8 }, { wch: 8 }, { wch: 10 }])]
 
-    const wb = xlsxUtils.book_new()
-    xlsxUtils.book_append_sheet(wb, ws, "stok_opname")
-    xlsxWriteFile(wb, `rekap_mutasi_${dateFrom}_${dateTo}.xlsx`)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "stok_opname")
+    XLSX.writeFile(wb, `rekap_mutasi_${dateFrom}_${dateTo}.xlsx`)
   }
 
   return (

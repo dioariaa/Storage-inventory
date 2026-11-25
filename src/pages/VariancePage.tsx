@@ -17,7 +17,7 @@ import {
   CircleAlert,
   ChevronDown,
 } from "lucide-react"
-import { utils as xlsxUtils, writeFile as xlsxWriteFile } from "xlsx"
+import * as XLSX from "xlsx-js-style"
 import {
   readUploadFile,
   computeVariance,
@@ -199,9 +199,21 @@ export function VariancePage() {
   }
 
   const exportExcel = () => {
-    const wb = xlsxUtils.book_new()
+    const wb = XLSX.utils.book_new()
 
-    // Sheet 1: format rekap mutasi, 4 kolom per tanggal
+    const STY = {
+      pos: { fill: { fgColor: { rgb: "FFDDEBF7" } }, font: { color: { rgb: "FF1F4E78" }, bold: true } },
+      neg: { fill: { fgColor: { rgb: "FFFFC7CE" } }, font: { color: { rgb: "FF9C0006" }, bold: true } },
+      ok: { fill: { fgColor: { rgb: "FFC6EFCE" } }, font: { color: { rgb: "FF006100" }, bold: true } },
+    }
+    const enc = (r: number, c: number) => XLSX.utils.encode_cell({ r, c })
+    const vStyle = (ws: any, r: number, c: number, v: number) => {
+      if (v === 0) return
+      const cell = ws[enc(r, c)]
+      if (cell) cell.s = v > 0 ? STY.pos : STY.neg
+    }
+
+    // Sheet 1: format rekap mutasi, 7 kolom per tanggal (IN MANUAL, OUT MANUAL, IN SISTEM, OUT SISTEM, SELISIH IN, SELISIH OUT, SELISIH STOK)
     const h1: (string | number)[] = ["NO", "ITEM (PORSI)", "STOC"]
     const h2: (string | number)[] = ["", "", ""]
     dateGroups.forEach((g) => {
@@ -209,14 +221,24 @@ export function VariancePage() {
       h2.push("IN MANUAL", "OUT MANUAL", "IN SISTEM", "OUT SISTEM", "SELISIH IN", "SELISIH OUT", "SELISIH STOK")
     })
     const aoa1: (string | number)[][] = [h1, h2]
+    const s1vals: { r: number; c: number; v: number }[][] = []
     rows.forEach((r, i) => {
       const row: (string | number)[] = [i + 1, r.bahan?.nama ?? r.fileRow.nama, r.fileRow.stoc]
-      r.calc.tl.forEach((t) => {
+      const perDate: { r: number; c: number; v: number }[] = []
+      const rowIdx = i + 2
+      r.calc.tl.forEach((t, di) => {
+        const base = 3 + di * 7
         row.push(t.mIn, t.mOut, t.sIn, t.sOut, t.mIn - t.sIn, t.mOut - t.sOut, t.varHari)
+        perDate.push(
+          { r: rowIdx, c: base + 4, v: t.mIn - t.sIn },
+          { r: rowIdx, c: base + 5, v: t.mOut - t.sOut },
+          { r: rowIdx, c: base + 6, v: t.varHari },
+        )
       })
       aoa1.push(row)
+      s1vals.push(perDate)
     })
-    const ws1 = xlsxUtils.aoa_to_sheet(aoa1)
+    const ws1 = XLSX.utils.aoa_to_sheet(aoa1)
     const merges: any[] = [
       { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
       { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
@@ -233,7 +255,8 @@ export function VariancePage() {
       { wch: 10 },
       ...dateGroups.flatMap(() => Array(7).fill({ wch: 11 })),
     ]
-    xlsxUtils.book_append_sheet(wb, ws1, "mutasi manual vs sistem")
+    s1vals.forEach((perDate) => perDate.forEach((d) => vStyle(ws1, d.r, d.c, d.v)))
+    XLSX.utils.book_append_sheet(wb, ws1, "mutasi manual vs sistem")
 
     // Sheet 2: variance detail per tanggal
     const aoa2: (string | number)[][] = [
@@ -254,11 +277,13 @@ export function VariancePage() {
         "VARIANCE",
       ],
     ]
+    const s2cells: { r: number; c: number; v: number }[] = []
     let no = 0
     rows.forEach((r) => {
       if (!r.bahan) return
       r.calc.tl.forEach((t) => {
         no++
+        const rowIdx = no
         aoa2.push([
           no,
           r.bahan!.nama,
@@ -275,14 +300,21 @@ export function VariancePage() {
           t.sistemBal,
           t.varBal,
         ])
+        s2cells.push(
+          { r: rowIdx, c: 8, v: t.mIn - t.sIn },
+          { r: rowIdx, c: 9, v: t.mOut - t.sOut },
+          { r: rowIdx, c: 10, v: t.varHari },
+          { r: rowIdx, c: 13, v: t.varBal },
+        )
       })
     })
-    const ws2 = xlsxUtils.aoa_to_sheet(aoa2)
+    const ws2 = XLSX.utils.aoa_to_sheet(aoa2)
     ws2["!cols"] = [
       { wch: 5 }, { wch: 30 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
       { wch: 12 }, { wch: 12 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
     ]
-    xlsxUtils.book_append_sheet(wb, ws2, "variance detail")
+    s2cells.forEach((d) => vStyle(ws2, d.r, d.c, d.v))
+    XLSX.utils.book_append_sheet(wb, ws2, "variance detail")
 
     // Sheet 3: ringkasan per item
     const aoa3: (string | number)[][] = [
@@ -301,13 +333,23 @@ export function VariancePage() {
         r.status === "ok" ? "OK" : r.status === "lebih" ? "LEBIH" : r.status === "kurang" ? "KURANG" : "TIDAK DIKENALI",
       ])
     })
-    const ws3 = xlsxUtils.aoa_to_sheet(aoa3)
+    const ws3 = XLSX.utils.aoa_to_sheet(aoa3)
     ws3["!cols"] = [
       { wch: 5 }, { wch: 30 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 },
     ]
-    xlsxUtils.book_append_sheet(wb, ws3, "ringkasan")
+    rows.forEach((r, i) => {
+      const rowIdx = i + 1
+      vStyle(ws3, rowIdx, 6, r.calc.variance)
+      const statusCell = ws3[enc(rowIdx, 8)]
+      if (statusCell) {
+        if (r.status === "ok") statusCell.s = STY.ok
+        else if (r.status === "lebih") statusCell.s = STY.pos
+        else if (r.status === "kurang") statusCell.s = STY.neg
+      }
+    })
+    XLSX.utils.book_append_sheet(wb, ws3, "ringkasan")
 
-    xlsxWriteFile(wb, `cek_variance${checkDate ? `_${checkDate}` : ""}.xlsx`)
+    XLSX.writeFile(wb, `cek_variance${checkDate ? `_${checkDate}` : ""}.xlsx`)
   }
 
   const statusBadge = (r: RowResult) => {
@@ -527,13 +569,40 @@ export function VariancePage() {
                                           <td className={"p-2 text-right tabular-nums " + (outDiff ? "text-rose-600 font-semibold" : "")}>
                                             {t.mOut > 0 ? fmt(t.mOut) : "-"}
                                           </td>
-                                          <td className={"p-2 text-right tabular-nums border-l " + (sInDiff ? "text-rose-600 font-semibold" : "")}>
+                                          <td
+                                            className={
+                                              "p-2 text-right tabular-nums border-l " +
+                                              (sInDiff
+                                                ? t.mIn - t.sIn > 0
+                                                  ? "bg-sky-500/20 text-sky-700 font-semibold"
+                                                  : "bg-rose-500/20 text-rose-700 font-semibold"
+                                                : "")
+                                            }
+                                          >
                                             {t.mIn - t.sIn !== 0 ? (t.mIn - t.sIn > 0 ? `+${fmt(t.mIn - t.sIn)}` : fmt(t.mIn - t.sIn)) : "-"}
                                           </td>
-                                          <td className={"p-2 text-right tabular-nums " + (sOutDiff ? "text-rose-600 font-semibold" : "")}>
+                                          <td
+                                            className={
+                                              "p-2 text-right tabular-nums " +
+                                              (sOutDiff
+                                                ? t.mOut - t.sOut > 0
+                                                  ? "bg-sky-500/20 text-sky-700 font-semibold"
+                                                  : "bg-rose-500/20 text-rose-700 font-semibold"
+                                                : "")
+                                            }
+                                          >
                                             {t.mOut - t.sOut !== 0 ? (t.mOut - t.sOut > 0 ? `+${fmt(t.mOut - t.sOut)}` : fmt(t.mOut - t.sOut)) : "-"}
                                           </td>
-                                          <td className={"p-2 text-right tabular-nums " + (sStokDiff ? "text-rose-600 font-semibold" : "")}>
+                                          <td
+                                            className={
+                                              "p-2 text-right tabular-nums " +
+                                              (sStokDiff
+                                                ? t.varHari > 0
+                                                  ? "bg-sky-500/20 text-sky-700 font-semibold"
+                                                  : "bg-rose-500/20 text-rose-700 font-semibold"
+                                                : "")
+                                            }
+                                          >
                                             {t.varHari !== 0 ? (t.varHari > 0 ? `+${fmt(t.varHari)}` : fmt(t.varHari)) : "-"}
                                           </td>
                                           <td className={"p-2 text-right tabular-nums border-l " + (balDiff ? "text-rose-600 font-semibold" : "")}>
@@ -545,7 +614,11 @@ export function VariancePage() {
                                           <td
                                             className={
                                               "p-2 text-right tabular-nums border-l font-semibold " +
-                                              (balDiff ? "text-rose-600" : "text-emerald-600")
+                                              (t.varBal === 0
+                                                ? "text-emerald-600"
+                                                : t.varBal > 0
+                                                  ? "bg-sky-500/20 text-sky-700"
+                                                  : "bg-rose-500/20 text-rose-700")
                                             }
                                           >
                                             {t.varBal > 0 ? `+${fmt(t.varBal)}` : fmt(t.varBal)}

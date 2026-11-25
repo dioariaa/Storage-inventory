@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 const DATE_RE = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/;
 const EPS = 0.0001;
