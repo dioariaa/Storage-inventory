@@ -14,17 +14,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Plus, Pencil, Boxes, Search } from "lucide-react"
-import { formatNumber, today, cn } from "@/lib/utils"
+import { formatNumber, today, daysAgo, cn, getErrorMessage } from "@/lib/utils"
 import type { BahanBaku, SaldoBahanBaku } from "@/types/database"
 import { PageHeader } from "@/components/common/PageHeader"
+
+const optionalNonNegNumber = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+  z.number().min(0, "Minimal 0").optional()
+)
 
 const schema = z.object({
   nama: z.string().min(1, "Nama wajib diisi"),
   satuan: z.string().min(1, "Satuan wajib diisi"),
   stok_awal: z.coerce.number().min(0),
-  minimum_stok: z.coerce.number().min(0).optional(),
+  minimum_stok: optionalNonNegNumber,
   is_active: z.boolean(),
   division: z.enum(["bar", "kitchen"]),
+  jenis: z.enum(["BAHAN_BAKU", "BAHAN_PRODUKSI"]),
 })
 type FormData = z.infer<typeof schema>
 
@@ -44,19 +50,16 @@ export function BahanBakuPage() {
   const [editItem, setEditItem] = useState<BahanBaku | null>(null)
   const [search, setSearch] = useState("")
   const [divisionFilter, setDivisionFilter] = useState<"all" | "bar" | "kitchen">("all")
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    return d.toISOString().split("T")[0]
-  })
+  const [jenisFilter, setJenisFilter] = useState<"all" | "BAHAN_BAKU" | "BAHAN_PRODUKSI">("all")
+  const [dateFrom, setDateFrom] = useState(() => daysAgo(30))
   const [dateTo, setDateTo] = useState(today)
   const [usageFilter, setUsageFilter] = useState<"all" | "used" | "unused">("all")
   const [sortBy, setSortBy] = useState<"nama" | "usage_desc" | "usage_asc">("nama")
   const [openUsage, setOpenUsage] = useState<string | null>(null)
   const [openUsageMobile, setOpenUsageMobile] = useState<string | null>(null)
 
-  const { data: recipes, isLoading: loadingRecipes } = useQuery({
-    queryKey: ["recipes-all"],
+  const { data: recipes } = useQuery({
+    queryKey: ["recipes-usage-by-bahan"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("recipe")
@@ -72,28 +75,34 @@ export function BahanBakuPage() {
 
   const { data: saldoList, isLoading } = useQuery({
     queryKey: ["saldo-bahan-baku", dateFrom, dateTo],
+    enabled: Boolean(dateFrom && dateTo),
     queryFn: async () => {
-      // 1. Get Mutasi Range
-      const { data: mutasi, error: mutasiError } = await supabase
-        .rpc("get_mutasi_bahan_range", { p_date_from: dateFrom, p_date_to: dateTo })
-      if (mutasiError) throw mutasiError
+      const [mutasiRes, bahanRes, saldoRes] = await Promise.all([
+        supabase.rpc("get_mutasi_bahan_range", { p_date_from: dateFrom, p_date_to: dateTo }),
+        supabase.from("bahan_baku").select("*").order("nama"),
+        supabase.from("v_saldo_bahan_baku").select("id, saldo_akhir"),
+      ])
+      if (mutasiRes.error) throw mutasiRes.error
+      if (bahanRes.error) throw bahanRes.error
+      if (saldoRes.error) throw saldoRes.error
 
-      // 2. Get All Materials
-      const { data: bahan, error: bahanError } = await supabase
-        .from("bahan_baku")
-        .select("*")
-        .order("nama")
-      if (bahanError) throw bahanError
+      const mutasiMap = new Map(
+        ((mutasiRes.data ?? []) as { bahan_baku_id: string; total_in: number; total_out: number }[]).map((m) => [
+          m.bahan_baku_id,
+          m,
+        ])
+      )
+      const actualSaldoMap = new Map(
+        ((saldoRes.data ?? []) as { id: string; saldo_akhir: number }[]).map((s) => [s.id, Number(s.saldo_akhir ?? 0)])
+      )
 
-      // 3. Map together
-      const map = new Map(mutasi.map((m: any) => [m.bahan_baku_id, m]))
-      return bahan.map((b) => {
-        const m: any = map.get(b.id) || { total_in: 0, total_out: 0 }
+      return (bahanRes.data ?? []).map((b: any) => {
+        const m = mutasiMap.get(b.id)
         return {
           ...b,
-          total_in: m.total_in ?? 0,
-          total_out: m.total_out ?? 0,
-          saldo_akhir: b.stok_awal + (m.total_in ?? 0) - (m.total_out ?? 0)
+          total_in: Number(m?.total_in ?? 0),
+          total_out: Number(m?.total_out ?? 0),
+          saldo_akhir: actualSaldoMap.get(b.id) ?? Number(b.stok_awal ?? 0),
         }
       }) as SaldoBahanBaku[]
     },
@@ -103,8 +112,6 @@ export function BahanBakuPage() {
     register,
     handleSubmit,
     reset,
-    watch,
-    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
@@ -113,7 +120,7 @@ export function BahanBakuPage() {
 
   const openCreate = () => {
     setEditItem(null)
-    reset({ nama: "", satuan: "", stok_awal: 0, minimum_stok: undefined, is_active: true, division: "bar" })
+    reset({ nama: "", satuan: "", stok_awal: 0, minimum_stok: undefined, is_active: true, division: "bar", jenis: "BAHAN_BAKU" })
     setOpen(true)
   }
 
@@ -126,6 +133,7 @@ export function BahanBakuPage() {
       minimum_stok: item.minimum_stok ?? undefined,
       is_active: item.is_active,
       division: item.division ?? "bar",
+      jenis: item.jenis ?? "BAHAN_BAKU",
     })
     setOpen(true)
   }
@@ -139,20 +147,25 @@ export function BahanBakuPage() {
         minimum_stok: data.minimum_stok ?? null,
         is_active: data.is_active,
         division: data.division,
-        created_by: profile?.id,
+        jenis: data.jenis,
       }
       if (editItem) {
         const { error } = await supabase.from("bahan_baku").update(payload as any).eq("id", editItem.id)
         if (error) throw error
       } else {
-        const { error } = await supabase.from("bahan_baku").insert(payload as any)
+        const { error } = await supabase
+          .from("bahan_baku")
+          .insert({ ...payload, created_by: profile?.id } as any)
         if (error) throw error
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["saldo-bahan-baku"] })
       queryClient.invalidateQueries({ queryKey: ["bahan-baku-aktif"] })
-      queryClient.invalidateQueries({ queryKey: ["bahan-baku-list"] })
+      queryClient.invalidateQueries({ queryKey: ["bahan-baku-options"] })
+      queryClient.invalidateQueries({ queryKey: ["bahan-baku-aktif-full"] })
+      queryClient.invalidateQueries({ queryKey: ["bom-admin"] })
+      queryClient.invalidateQueries({ queryKey: ["produksi-master"] })
       setOpen(false)
     },
   })
@@ -171,14 +184,16 @@ export function BahanBakuPage() {
   )
 
   const filtered = saldoList?.filter((b) => {
-    const matchSearch = b.nama.toLowerCase().includes(search.toLowerCase())
+    const q = search.toLowerCase()
+    const matchSearch = b.nama.toLowerCase().includes(q) || b.satuan.toLowerCase().includes(q)
     const matchDiv = divisionFilter === "all" || b.division === divisionFilter
+    const matchJenis = jenisFilter === "all" || b.jenis === jenisFilter
     const usage = usageMap[b.id]?.length ?? 0
     const matchUsage =
       usageFilter === "all" ||
       (usageFilter === "used" && usage > 0) ||
       (usageFilter === "unused" && usage === 0)
-    return matchSearch && matchDiv && matchUsage
+    return matchSearch && matchDiv && matchJenis && matchUsage
   })
 
   const sorted = [...(filtered ?? [])].sort((a, b) => {
@@ -231,6 +246,16 @@ export function BahanBakuPage() {
               <option value="unused">Belum dipakai</option>
             </select>
             <select
+              value={jenisFilter}
+              onChange={(e) => setJenisFilter(e.target.value as any)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              aria-label="Filter jenis bahan"
+            >
+              <option value="all">Semua Jenis</option>
+              <option value="BAHAN_BAKU">Mentah</option>
+              <option value="BAHAN_PRODUKSI">Processed</option>
+            </select>
+            <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -276,6 +301,7 @@ export function BahanBakuPage() {
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nama Bahan</th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">Dipakai di Menu</th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Jenis</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Satuan</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Stok Awal</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total IN</th>
@@ -341,6 +367,11 @@ export function BahanBakuPage() {
                               </PopoverContent>
                             </Popover>
                           )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant={b.jenis === "BAHAN_PRODUKSI" ? "default" : "outline"}>
+                            {b.jenis === "BAHAN_PRODUKSI" ? "Processed" : "Mentah"}
+                          </Badge>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{b.satuan}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{formatNumber(b.stok_awal)}</td>
@@ -418,6 +449,9 @@ export function BahanBakuPage() {
                           <p className="mt-0.5 text-xs text-muted-foreground">{b.satuan}</p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
+                          <Badge variant={b.jenis === "BAHAN_PRODUKSI" ? "default" : "outline"}>
+                            {b.jenis === "BAHAN_PRODUKSI" ? "Processed" : "Mentah"}
+                          </Badge>
                           <Badge variant={b.division === "bar" ? "default" : "secondary"}>
                             {b.division === "bar" ? "Bar" : "Kitchen"}
                           </Badge>
@@ -503,7 +537,7 @@ export function BahanBakuPage() {
           <form onSubmit={handleSubmit((d) => mutation.mutate(d as FormData))} className="space-y-4">
             {mutation.error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                {String(mutation.error)}
+                {getErrorMessage(mutation.error)}
               </div>
             )}
             <div className="space-y-1.5">
@@ -527,6 +561,16 @@ export function BahanBakuPage() {
                 <Label>Minimum Stok (opsional)</Label>
                 <Input type="number" min="0" step="any" {...register("minimum_stok")} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Jenis Bahan</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                {...register("jenis")}
+              >
+                <option value="BAHAN_BAKU">Mentah (dibeli)</option>
+                <option value="BAHAN_PRODUKSI">Processed (hasil masak)</option>
+              </select>
             </div>
             <div className="space-y-1.5">
               <Label>Divisi</Label>

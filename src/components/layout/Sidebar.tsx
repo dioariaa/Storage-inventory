@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   PackagePlus,
   PackageMinus,
+  CookingPot,
   Boxes,
   UtensilsCrossed,
   BookOpen,
@@ -20,16 +21,36 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { TambahMenuWizardModal } from "@/components/menu/TambahMenuWizardModal"
 
-const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/barang-masuk", icon: PackagePlus, label: "Barang Masuk" },
-  { to: "/barang-keluar", icon: PackageMinus, label: "Barang Keluar" },
-  { to: "/bahan-baku", icon: Boxes, label: "Bahan Baku", adminOnly: true },
-  { to: "/menu", icon: UtensilsCrossed, label: "Menu", adminOnly: true },
-  { to: "/recipe", icon: BookOpen, label: "Recipe", adminOnly: true },
-  { to: "/rekap-mutasi", icon: Calendar, label: "Rekap Mutasi", adminOnly: true },
-  { to: "/variance", icon: Scale, label: "Cek Variance", adminOnly: true },
-  { to: "/riwayat", icon: History, label: "Riwayat" },
+const navGroups = [
+  {
+    label: "Utama",
+    items: [{ to: "/", icon: LayoutDashboard, label: "Dashboard" }],
+  },
+  {
+    label: "Transaksi",
+    items: [
+      { to: "/barang-masuk", icon: PackagePlus, label: "Barang Masuk" },
+      { to: "/barang-keluar", icon: PackageMinus, label: "Barang Keluar" },
+      { to: "/produksi", icon: CookingPot, label: "Input Masak" },
+      { to: "/riwayat", icon: History, label: "Riwayat" },
+    ],
+  },
+  {
+    label: "Master Data",
+    items: [
+      { to: "/bahan-baku", icon: Boxes, label: "Bahan Baku", adminOnly: true },
+      { to: "/bom", icon: CookingPot, label: "Atur BOM", adminOnly: true },
+      { to: "/menu", icon: UtensilsCrossed, label: "Menu", adminOnly: true },
+      { to: "/recipe", icon: BookOpen, label: "Recipe", adminOnly: true },
+    ],
+  },
+  {
+    label: "Laporan",
+    items: [
+      { to: "/rekap-mutasi", icon: Calendar, label: "Rekap Mutasi", adminOnly: true },
+      { to: "/variance", icon: Scale, label: "Cek Variance", adminOnly: true },
+    ],
+  },
 ]
 
 interface SidebarProps {
@@ -48,9 +69,12 @@ export function Sidebar({ open, onClose }: SidebarProps = {}) {
     navigate("/login")
   }
 
-  const visibleItems = navItems.filter(
-    (item) => !item.adminOnly || profile?.role === "admin"
-  )
+  const visibleGroups = navGroups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((item) => !("adminOnly" in item) || profile?.role === "admin"),
+    }))
+    .filter((g) => g.items.length > 0)
 
   return (
     <>
@@ -107,23 +131,28 @@ export function Sidebar({ open, onClose }: SidebarProps = {}) {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {visibleItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )
-            }
-          >
-            <item.icon className="h-5 w-5 shrink-0" />
-            {!collapsed && <span>{item.label}</span>}
-          </NavLink>
+        {visibleGroups.map((group) => (
+          <div key={group.label} className="space-y-1">
+            {!collapsed && <h2 className="px-3 pt-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{group.label}</h2>}
+            {group.items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  )
+                }
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
 

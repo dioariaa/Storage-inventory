@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Pencil, Trash2, UtensilsCrossed, Sparkles, Search, AlertTriangle } from "lucide-react"
-import { formatRupiah } from "@/lib/utils"
+import { formatRupiah, getErrorMessage } from "@/lib/utils"
 import type { Menu } from "@/types/database"
 import { TambahMenuWizardModal } from "@/components/menu/TambahMenuWizardModal"
 import { PageHeader } from "@/components/common/PageHeader"
@@ -40,7 +40,7 @@ export function MenuPage() {
   const [filterStatus, setFilterStatus] = useState("all")
 
   const { data: menuList, isLoading } = useQuery({
-    queryKey: ["menu-list"],
+    queryKey: ["menu-list-all"],
     queryFn: async () => {
       const { data, error } = await supabase.from("menu").select("*").order("nama")
       if (error) throw error
@@ -107,7 +107,8 @@ export function MenuPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["menu-list"] })
+      queryClient.invalidateQueries({ queryKey: ["menu-list-all"] })
+      queryClient.invalidateQueries({ queryKey: ["menu-list-aktif"] })
       queryClient.invalidateQueries({ queryKey: ["recipe-count-per-menu"] })
       setOpen(false)
     },
@@ -119,11 +120,12 @@ export function MenuPage() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["menu-list"] })
+      queryClient.invalidateQueries({ queryKey: ["menu-list-all"] })
+      queryClient.invalidateQueries({ queryKey: ["menu-list-aktif"] })
       queryClient.invalidateQueries({ queryKey: ["recipe-count-per-menu"] })
     },
     onError: (err) => {
-      alert("Gagal menghapus menu: " + String(err))
+      alert("Gagal menghapus menu: " + getErrorMessage(err))
     },
   })
 
@@ -450,7 +452,7 @@ export function MenuPage() {
           <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
             {mutation.error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                {String(mutation.error)}
+                {getErrorMessage(mutation.error)}
               </div>
             )}
             <div className="space-y-1.5">

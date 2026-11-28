@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { Fragment, useState, useMemo, useRef } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -93,7 +93,7 @@ export function VariancePage() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
 
   const { data: bahanList } = useQuery({
-    queryKey: ["bahan-baku-list"],
+    queryKey: ["bahan-baku-aktif-full"],
     queryFn: async () => {
       const { data, error } = await supabase.from("bahan_baku").select("*").eq("is_active", true).order("nama")
       if (error) throw error
@@ -103,18 +103,20 @@ export function VariancePage() {
 
   const { data: details } = useQuery({
     queryKey: ["variance-details"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transaksi_detail")
-        .select("bahan_baku_id, qty, transaksi!inner(tgl_transaksi, jenis, sumber, alasan_out, is_posted)")
-        .eq("transaksi.is_posted", true)
-      if (error) throw error
-      return data as any[]
-    },
+    queryFn: () =>
+      fetchAllRows<any>((from, to) =>
+        supabase
+          .from("transaksi_detail")
+          .select("id, bahan_baku_id, qty, transaksi!inner(tgl_transaksi, jenis, sumber, alasan_out, is_posted)")
+          .eq("transaksi.is_posted", true)
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
   })
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ""
     if (!file) return
     setFileName(file.name)
     const res = await readUploadFile(file)
@@ -178,8 +180,10 @@ export function VariancePage() {
       }
       const sys = sysItems.get(bahan.id)
       const calc = computeVariance(fr, dates, sys, checkDate)
-      const status = calc.variance === 0 ? ("ok" as const) : calc.variance > 0 ? ("lebih" as const) : ("kurang" as const)
-      return { fileRow: fr, bahan, calc, events: eventsMap.get(bahan.id) ?? new Map(), status }
+      const EPS = 0.0001
+      const cleanVar = Math.abs(calc.variance) <= EPS ? 0 : calc.variance
+      const status = cleanVar === 0 ? ("ok" as const) : cleanVar > 0 ? ("lebih" as const) : ("kurang" as const)
+      return { fileRow: fr, bahan, calc: { ...calc, variance: cleanVar }, events: eventsMap.get(bahan.id) ?? new Map(), status }
     })
   }, [fileRows, bahanList, details, dates, sysItems, checkDate, eventsMap])
 
@@ -208,9 +212,10 @@ export function VariancePage() {
     }
     const enc = (r: number, c: number) => XLSX.utils.encode_cell({ r, c })
     const vStyle = (ws: any, r: number, c: number, v: number) => {
-      if (v === 0) return
       const cell = ws[enc(r, c)]
-      if (cell) cell.s = v > 0 ? STY.pos : STY.neg
+      if (!cell) return
+      if (Math.abs(v) <= 0.0001) cell.s = STY.ok
+      else cell.s = v > 0 ? STY.pos : STY.neg
     }
 
     // Sheet 1: format rekap mutasi, 7 kolom per tanggal (IN MANUAL, OUT MANUAL, IN SISTEM, OUT SISTEM, SELISIH IN, SELISIH OUT, SELISIH STOK)

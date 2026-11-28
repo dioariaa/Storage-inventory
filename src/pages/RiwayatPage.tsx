@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { formatDate, formatDateTime, formatNumber } from "@/lib/utils"
+import { supabase, fetchAllRows } from "@/lib/supabase"
+import { formatDate, formatDateTime, formatNumber, today, daysAgo } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,16 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { History } from "lucide-react"
 import type { MutasiDashboard } from "@/types/database"
 import { TRANSACTION_SOURCE_LABEL } from "@/types/database"
-import { today } from "@/lib/utils"
 import { PageHeader } from "@/components/common/PageHeader"
-import { Button } from "@/components/ui/button"
 
 export function RiwayatPage() {
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    return d.toISOString().split("T")[0]
-  })
+  const [dateFrom, setDateFrom] = useState(() => daysAgo(30))
   const [dateTo, setDateTo] = useState(today)
   const [filterBahan, setFilterBahan] = useState("all")
   const [filterJenis, setFilterJenis] = useState("all")
@@ -28,27 +22,25 @@ export function RiwayatPage() {
 
   const { data: mutasi, isLoading } = useQuery({
     queryKey: ["riwayat", dateFrom, dateTo, filterBahan, filterJenis, filterSumber],
-    queryFn: async () => {
-      let q = supabase
-        .from("v_mutasi_dashboard")
-        .select("*")
-        .gte("tgl_transaksi", dateFrom)
-        .lte("tgl_transaksi", dateTo)
-        .order("tgl_transaksi", { ascending: false })
-        .order("waktu_pencatatan", { ascending: false })
+    queryFn: () =>
+      fetchAllRows<MutasiDashboard>((from, to) => {
+        let q = supabase.from("v_mutasi_dashboard").select("*")
+        if (dateFrom) q = q.gte("tgl_transaksi", dateFrom)
+        if (dateTo) q = q.lte("tgl_transaksi", dateTo)
+        if (filterBahan !== "all") q = q.eq("bahan_baku_id", filterBahan)
+        if (filterJenis !== "all") q = q.eq("jenis", filterJenis)
+        if (filterSumber !== "all") q = q.eq("sumber", filterSumber)
 
-      if (filterBahan !== "all") q = q.eq("bahan_baku_id", filterBahan)
-      if (filterJenis !== "all") q = q.eq("jenis", filterJenis)
-      if (filterSumber !== "all") q = q.eq("sumber", filterSumber)
-
-      const { data, error } = await q
-      if (error) throw error
-      return data as MutasiDashboard[]
-    },
+        return q
+          .order("tgl_transaksi", { ascending: false })
+          .order("waktu_pencatatan", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)
+      }),
   })
 
   const { data: bahanList } = useQuery({
-    queryKey: ["bahan-baku-list"],
+    queryKey: ["bahan-baku-options"],
     queryFn: async () => {
       const { data, error } = await supabase.from("bahan_baku").select("id, nama").order("nama")
       if (error) throw error
@@ -113,6 +105,7 @@ export function RiwayatPage() {
                   <SelectItem value="all">Semua Sumber</SelectItem>
                   <SelectItem value="MANUAL_IN">Manual IN</SelectItem>
                   <SelectItem value="MANUAL_OUT">Manual OUT</SelectItem>
+                  <SelectItem value="PRODUKSI">Input Masak / Produksi</SelectItem>
                   <SelectItem value="POS_IMPORT">Import POS</SelectItem>
                   <SelectItem value="MANUAL_SALE">Penjualan Manual</SelectItem>
                 </SelectContent>

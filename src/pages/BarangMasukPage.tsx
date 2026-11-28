@@ -4,7 +4,7 @@ import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { supabase } from "@/lib/supabase"
-import { today } from "@/lib/utils"
+import { today, getErrorMessage } from "@/lib/utils"
 import { useAuthStore } from "@/stores/authStore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -72,13 +72,19 @@ export function BarangMasukPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // 1. Ambil saldo setiap bahan baku
-      const saldoMap: Record<string, number> = {}
+      // 1. Gabungkan item duplikat dan ambil saldo fresh setiap bahan baku
+      const qtyByBahan = new Map<string, number>()
       for (const item of data.items) {
-        const { data: saldo } = await supabase.rpc("get_saldo_bahan", {
-          p_bahan_baku_id: item.bahan_baku_id,
+        qtyByBahan.set(item.bahan_baku_id, (qtyByBahan.get(item.bahan_baku_id) ?? 0) + item.qty)
+      }
+      const uniqueIds = [...qtyByBahan.keys()]
+      const saldoMap: Record<string, number> = {}
+      for (const bahanId of uniqueIds) {
+        const { data: saldo, error: saldoErr } = await supabase.rpc("get_saldo_bahan", {
+          p_bahan_baku_id: bahanId,
         } as any)
-        saldoMap[item.bahan_baku_id] = Number(saldo ?? 0)
+        if (saldoErr) throw saldoErr
+        saldoMap[bahanId] = Number(saldo ?? 0)
       }
 
       // 2. Buat transaksi header
@@ -98,14 +104,20 @@ export function BarangMasukPage() {
 
       if (trxErr) throw trxErr
 
-      // 3. Buat detail
-      const details = data.items.map((item) => ({
-        transaksi_id: (trx as any).id,
-        bahan_baku_id: item.bahan_baku_id,
-        qty: item.qty,
-        saldo_sebelum: saldoMap[item.bahan_baku_id],
-        saldo_sesudah: saldoMap[item.bahan_baku_id] + item.qty,
-      }))
+      // 3. Buat detail (running saldo akurat meski user memilih bahan sama 2x)
+      const runningSaldo = { ...saldoMap }
+      const details = data.items.map((item) => {
+        const before = runningSaldo[item.bahan_baku_id]
+        const after = before + item.qty
+        runningSaldo[item.bahan_baku_id] = after
+        return {
+          transaksi_id: (trx as any).id,
+          bahan_baku_id: item.bahan_baku_id,
+          qty: item.qty,
+          saldo_sebelum: before,
+          saldo_sesudah: after,
+        }
+      })
 
       const { error: detErr } = await supabase.from("transaksi_detail").insert(details as any)
       if (detErr) throw detErr
@@ -137,7 +149,7 @@ export function BarangMasukPage() {
 
       {mutation.error && (
         <div className="bg-destructive/10 text-destructive rounded-lg p-4 text-sm">
-          Gagal menyimpan: {String(mutation.error)}
+          Gagal menyimpan: {getErrorMessage(mutation.error)}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 // Database type definitions matching Supabase schema
 
 export type TransactionType = "IN" | "OUT"
-export type TransactionSource = "MANUAL_IN" | "MANUAL_OUT" | "POS_IMPORT" | "MANUAL_SALE"
+export type TransactionSource = "MANUAL_IN" | "MANUAL_OUT" | "POS_IMPORT" | "MANUAL_SALE" | "PRODUKSI"
 export type OutReason = "WASTE" | "EXPIRED" | "TESTING" | "OPERATIONAL" | "OTHER"
 export type UserRole = "admin" | "staff"
 
@@ -85,6 +85,7 @@ export interface BahanBaku {
   id: string
   nama: string
   satuan: string
+  jenis: 'BAHAN_BAKU' | 'BAHAN_PRODUKSI'
   stok_awal: number
   minimum_stok: number | null
   is_active: boolean
@@ -177,6 +178,7 @@ export interface SaldoBahanBaku {
   id: string
   nama: string
   satuan: string
+  jenis: 'BAHAN_BAKU' | 'BAHAN_PRODUKSI'
   stok_awal: number
   minimum_stok: number | null
   is_active: boolean
@@ -232,4 +234,5 @@ export const TRANSACTION_SOURCE_LABEL: Record<TransactionSource, string> = {
   MANUAL_OUT: "Barang Keluar Manual",
   POS_IMPORT: "Import POS",
   MANUAL_SALE: "Input Penjualan Manual",
+  PRODUKSI: "Input Masak / Produksi",
 }

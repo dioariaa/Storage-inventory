@@ -4,7 +4,7 @@ import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { supabase } from "@/lib/supabase"
-import { today, formatNumber } from "@/lib/utils"
+import { today, formatNumber, getErrorMessage } from "@/lib/utils"
 import { useAuthStore } from "@/stores/authStore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -78,6 +78,7 @@ export function BarangKeluarPage() {
     watch,
     setValue,
     reset,
+    formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
     defaultValues: {
@@ -93,12 +94,23 @@ export function BarangKeluarPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // Validasi saldo tidak negatif
+      // Agregasi total OUT per bahan dan validasi terhadap saldo fresh di DB
+      const totalByBahan = new Map<string, number>()
       for (const item of data.items) {
-        const saldo = getSaldo(item.bahan_baku_id)
-        if (item.qty > saldo) {
+        totalByBahan.set(item.bahan_baku_id, (totalByBahan.get(item.bahan_baku_id) ?? 0) + item.qty)
+      }
+
+      const freshSaldoMap: Record<string, number> = {}
+      for (const [bahanId, totalQty] of totalByBahan.entries()) {
+        const { data: freshSaldo, error: saldoErr } = await supabase.rpc("get_saldo_bahan", {
+          p_bahan_baku_id: bahanId,
+        } as any)
+        if (saldoErr) throw saldoErr
+        const saldo = Number(freshSaldo ?? 0)
+        freshSaldoMap[bahanId] = saldo
+        if (totalQty > saldo) {
           throw new Error(
-            `OUT melebihi saldo. Saldo "${bahanList?.find(b => b.id === item.bahan_baku_id)?.nama}": ${formatNumber(saldo)}`
+            `OUT melebihi saldo. Total keluar "${bahanList?.find((b) => b.id === bahanId)?.nama}": ${formatNumber(totalQty)}, saldo tersedia: ${formatNumber(saldo)}`
           )
         }
       }
@@ -120,14 +132,17 @@ export function BarangKeluarPage() {
 
       if (trxErr) throw trxErr
 
+      const runningSaldo = { ...freshSaldoMap }
       const details = data.items.map((item) => {
-        const saldo = getSaldo(item.bahan_baku_id)
+        const before = runningSaldo[item.bahan_baku_id]
+        const after = before - item.qty
+        runningSaldo[item.bahan_baku_id] = after
         return {
           transaksi_id: (trx as any).id,
           bahan_baku_id: item.bahan_baku_id,
           qty: item.qty,
-          saldo_sebelum: saldo,
-          saldo_sesudah: saldo - item.qty,
+          saldo_sebelum: before,
+          saldo_sesudah: after,
         }
       })
 
@@ -198,7 +213,7 @@ export function BarangKeluarPage() {
           )}
           {mutation.error && (
             <div className="bg-destructive/10 text-destructive rounded-lg p-4 text-sm">
-              Gagal: {String(mutation.error)}
+              Gagal: {getErrorMessage(mutation.error)}
             </div>
           )}
 
@@ -252,11 +267,14 @@ export function BarangKeluarPage() {
                           {index === 0 && <Label>Bahan Baku</Label>}
                           <SearchableSelect
                             value={selectedId ?? ""}
-                            onChange={(v) => setValue(`items.${index}.bahan_baku_id`, v)}
+                            onChange={(v) => setValue(`items.${index}.bahan_baku_id`, v, { shouldValidate: true })}
                             options={(bahanList ?? []).map((b) => ({ id: b.id, label: b.nama, hint: b.satuan }))}
                             placeholder="Pilih bahan baku..."
                             emptyText="Bahan baku tidak ditemukan"
                           />
+                          {errors.items?.[index]?.bahan_baku_id && (
+                            <p className="text-xs text-destructive">{errors.items[index]?.bahan_baku_id?.message}</p>
+                          )}
                         </div>
                         <div className="w-full sm:w-36 space-y-1.5">
                           {index === 0 && <Label>Jumlah</Label>}
@@ -270,6 +288,9 @@ export function BarangKeluarPage() {
                             />
                             <span className="text-xs text-muted-foreground w-10 shrink-0">{satuan}</span>
                           </div>
+                          {errors.items?.[index]?.qty && (
+                            <p className="text-xs text-destructive">{errors.items[index]?.qty?.message}</p>
+                          )}
                         </div>
                         <Button
                           type="button"

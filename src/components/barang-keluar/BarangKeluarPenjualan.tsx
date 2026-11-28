@@ -74,7 +74,7 @@ export function BarangKeluarPenjualan() {
   const [error, setError] = useState<string | null>(null)
 
   const { data: menuList } = useQuery({
-    queryKey: ["menu-list"],
+    queryKey: ["menu-list-aktif"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu")

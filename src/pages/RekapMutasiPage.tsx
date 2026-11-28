@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { useState, useMemo, useEffect, useRef, Fragment } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllRows } from "@/lib/supabase"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/components/common/PageHeader"
 import * as XLSX from "xlsx-js-style"
 import { FileDown, Calendar } from "lucide-react"
-import { today } from "@/lib/utils"
+import { today, daysAgo } from "@/lib/utils"
 
 interface CellMutasi {
   in: number
@@ -28,16 +28,13 @@ interface RowMutasi {
 }
 
 export function RekapMutasiPage() {
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 7)
-    return d.toISOString().split("T")[0]
-  })
+  const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
   const [dateTo, setDateTo] = useState(today)
   const [division, setDivision] = useState("all")
 
   const { data: rows, isLoading } = useQuery({
     queryKey: ["rekap-mutasi", dateFrom, dateTo, division],
+    enabled: Boolean(dateFrom && dateTo),
     queryFn: async (): Promise<RowMutasi[]> => {
       let bq = supabase
         .from("bahan_baku")
@@ -46,32 +43,36 @@ export function RekapMutasiPage() {
         .order("nama")
       if (division !== "all") bq = bq.eq("division", division)
 
-      const [bahanRes, detailRes] = await Promise.all([
+      const [bahanRes, allDetails] = await Promise.all([
         bq,
-        supabase
-          .from("transaksi_detail")
-          .select("bahan_baku_id, qty, transaksi!inner(tgl_transaksi, jenis, is_posted)")
-          .eq("transaksi.is_posted", true),
+        fetchAllRows<any>((from, to) =>
+          supabase
+            .from("transaksi_detail")
+            .select("id, bahan_baku_id, qty, transaksi!inner(tgl_transaksi, jenis, is_posted)")
+            .eq("transaksi.is_posted", true)
+            .lte("transaksi.tgl_transaksi", dateTo)
+            .order("id", { ascending: true })
+            .range(from, to)
+        ),
       ])
       if (bahanRes.error) throw bahanRes.error
-      if (detailRes.error) throw detailRes.error
 
       const result: RowMutasi[] = (bahanRes.data ?? []).map((b: any) => ({
         id: b.id,
         nama: b.nama,
         satuan: b.satuan ?? "",
         division: b.division ?? "bar",
-        saldoAwal: b.stok_awal ?? 0,
+        saldoAwal: Number(b.stok_awal ?? 0),
         saldoAkhir: 0,
         cells: {},
       }))
       const byId = new Map(result.map((r) => [r.id, r]))
 
-      ;(detailRes.data ?? []).forEach((d: any) => {
+      allDetails.forEach((d: any) => {
         const row = byId.get(d.bahan_baku_id)
         if (!row) return
         const tgl = d.transaksi.tgl_transaksi
-        const qty = d.qty
+        const qty = Number(d.qty ?? 0)
         const isIn = d.transaksi.jenis === "IN"
         if (tgl < dateFrom) {
           row.saldoAwal += isIn ? qty : -qty
@@ -92,10 +93,13 @@ export function RekapMutasiPage() {
   })
 
   const dates = useMemo(() => {
+    if (!dateFrom || !dateTo || dateFrom > dateTo) return []
     const arr: string[] = []
-    const start = new Date(dateFrom)
-    const end = new Date(dateTo)
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const start = new Date(`${dateFrom}T00:00:00Z`)
+    const end = new Date(`${dateTo}T00:00:00Z`)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return []
+    const maxDays = 366
+    for (let d = new Date(start); d <= end && arr.length < maxDays; d.setUTCDate(d.getUTCDate() + 1)) {
       arr.push(d.toISOString().split("T")[0])
     }
     return arr

@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { supabase } from "@/lib/supabase"
+import { queryClient } from "@/lib/queryClient"
 import type { Profile } from "@/types/database"
 import type { Session, User } from "@supabase/supabase-js"
 
@@ -97,6 +98,7 @@ export const useAuthStore = create<AuthState>()(
 
       signOut: async () => {
         await supabase.auth.signOut()
+        queryClient.clear()
         set({ session: null, user: null, profile: null, loading: false })
       },
     }),

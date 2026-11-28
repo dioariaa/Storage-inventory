@@ -196,10 +196,13 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
       if (recipeErr) throw recipeErr
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["menu-list"] })
+      queryClient.invalidateQueries({ queryKey: ["menu-list-all"] })
+      queryClient.invalidateQueries({ queryKey: ["menu-list-aktif"] })
       queryClient.invalidateQueries({ queryKey: ["bahan-baku-aktif"] })
-      queryClient.invalidateQueries({ queryKey: ["bahan-baku-list"] })
+      queryClient.invalidateQueries({ queryKey: ["bahan-baku-options"] })
+      queryClient.invalidateQueries({ queryKey: ["bahan-baku-aktif-full"] })
       queryClient.invalidateQueries({ queryKey: ["recipes-all"] })
+      queryClient.invalidateQueries({ queryKey: ["recipes-usage-by-bahan"] })
       queryClient.invalidateQueries({ queryKey: ["all-recipes"] })
       queryClient.invalidateQueries({ queryKey: ["recipe-count-per-menu"] })
       queryClient.invalidateQueries({ queryKey: ["saldo-bahan-baku"] })

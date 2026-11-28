@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx-js-style";
 
-const DATE_RE = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/;
+const DATE_RE = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/;
+const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const EPS = 0.0001;
 
 export interface DateGroup {
@@ -63,16 +64,40 @@ export interface VarianceCalc {
   flowEdited: boolean;
 }
 
+function isValidCalendarDate(y: number, m: number, d: number): boolean {
+  if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
 export function toISO(raw: unknown): string | null {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 36526 && raw <= 73050) {
+    // Excel serial date (epoch 1899-12-30)
+    const utcMs = Math.round((raw - 25569) * 86400 * 1000);
+    const dt = new Date(utcMs);
+    const y = dt.getUTCFullYear();
+    const mon = dt.getUTCMonth() + 1;
+    const d = dt.getUTCDate();
+    if (!isValidCalendarDate(y, mon, d)) return null;
+    return `${y}-${String(mon).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
   if (typeof raw !== "string" && typeof raw !== "number") return null;
   const s = String(raw).trim();
+  const isoM = s.match(ISO_RE);
+  if (isoM) {
+    const y = Number(isoM[1]);
+    const mon = Number(isoM[2]);
+    const d = Number(isoM[3]);
+    if (!isValidCalendarDate(y, mon, d)) return null;
+    return s;
+  }
   const m = s.match(DATE_RE);
   if (!m) return null;
-  const d = Number(m[1]).toString().padStart(2, "0");
-  const mon = Number(m[2]).toString().padStart(2, "0");
-  const y = m[3];
-  if (Number(y) < 2000 || Number(y) > 2100) return null;
-  return `${y}-${mon}-${d}`;
+  const d = Number(m[1]);
+  const mon = Number(m[2]);
+  const y = Number(m[3]);
+  if (!isValidCalendarDate(y, mon, d)) return null;
+  return `${y}-${String(mon).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 export function parseOpnameRows(rows: unknown[][]): ParseResult {
@@ -138,7 +163,24 @@ export function parseOpnameRows(rows: unknown[][]): ParseResult {
   const num = (v: unknown): number => {
     if (v === undefined || v === null || v === "") return 0;
     if (typeof v === "number") return isNaN(v) ? 0 : v;
-    const n = Number(String(v).replace(/,/g, ""));
+    const raw = String(v).trim();
+    if (!raw) return 0;
+    let normalized = raw;
+    if (raw.includes(",") && raw.includes(".")) {
+      // Tentukan pemisah desimal berdasarkan posisi terakhir (contoh: "1.500,5" vs "1,500.5")
+      normalized =
+        raw.lastIndexOf(",") > raw.lastIndexOf(".")
+          ? raw.replace(/\./g, "").replace(",", ".")
+          : raw.replace(/,/g, "");
+    } else if (raw.includes(",")) {
+      // Format Indonesia "1,5" atau "12,75" vs pemisah ribuan "1,500"
+      const parts = raw.split(",");
+      normalized =
+        parts.length === 2 && parts[1].length !== 3
+          ? raw.replace(",", ".")
+          : raw.replace(/,/g, "");
+    }
+    const n = Number(normalized);
     return isNaN(n) ? 0 : n;
   };
 

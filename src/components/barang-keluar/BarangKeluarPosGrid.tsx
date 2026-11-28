@@ -23,7 +23,7 @@ export function BarangKeluarPosGrid() {
   const [error, setError] = useState<string | null>(null)
 
   const { data: menuList, isLoading: loadingMenu } = useQuery({
-    queryKey: ["menu-list"],
+    queryKey: ["menu-list-aktif"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu")
@@ -213,7 +213,7 @@ export function BarangKeluarPosGrid() {
 
   return (
     <div className="w-full" style={{ touchAction: "manipulation" }}>
-      <div className="grid grid-cols-1 gap-4 items-start w-full lg:grid-cols-[minmax(0,1fr)_340px] lg:min-w-[1024px]">
+      <div className="grid grid-cols-1 gap-4 items-start w-full lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
             {/* ============ KATALOG MENU (kiri, ~70%) ============ */}
             <section className="min-w-0 space-y-4">
 

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Skeleton } from "@/components/ui/skeleton"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Plus, Trash2, BookOpen, Pencil, Sparkles, Search } from "lucide-react"
-import { formatNumber } from "@/lib/utils"
+import { formatNumber, getErrorMessage } from "@/lib/utils"
 import type { Menu, BahanBaku, Recipe } from "@/types/database"
 import { TambahMenuWizardModal } from "@/components/menu/TambahMenuWizardModal"
 
@@ -46,7 +46,7 @@ export function RecipePage() {
   const [filterKategori, setFilterKategori] = useState("all")
 
   const { data: menuList } = useQuery({
-    queryKey: ["menu-list"],
+    queryKey: ["menu-list-all"],
     queryFn: async () => {
       const { data, error } = await supabase.from("menu").select("*").order("nama")
       if (error) throw error
@@ -63,7 +63,7 @@ export function RecipePage() {
     },
   })
 
-  const { data: recipes, isLoading, refetch } = useQuery({
+  const { data: recipes, isLoading } = useQuery({
     queryKey: ["recipes-all"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -131,6 +131,7 @@ export function RecipePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipes-all"] })
+      queryClient.invalidateQueries({ queryKey: ["recipes-usage-by-bahan"] })
       queryClient.invalidateQueries({ queryKey: ["all-recipes"] })
       queryClient.invalidateQueries({ queryKey: ["recipe-count-per-menu"] })
       setOpen(false)
@@ -150,6 +151,7 @@ export function RecipePage() {
 
   // Filter: menu terpilih + divisi + kategori + pencarian nama menu
   const filteredRecipes = recipes?.filter((r) => {
+    if (!r.menu) return false
     const matchMenu = filterMenuId === "all" || r.menu_id === filterMenuId
     const matchDiv = filterDivision === "all" || r.menu.division === filterDivision
     const matchKat = filterKategori === "all" || r.menu.kategori === filterKategori
@@ -160,7 +162,7 @@ export function RecipePage() {
 
   // Menu yang belum punya recipe (untuk Set Recipe Menu)
   const menuTanpaRecipe = menuList?.filter(
-    (m) => !(recipes?.some((r) => r.menu_id === m.id))
+    (m) => m.is_active && !(recipes?.some((r) => r.menu_id === m.id))
   )
 
   // Group recipes by menu
@@ -311,9 +313,9 @@ export function RecipePage() {
                     <tbody>
                       {items.map((r) => (
                         <tr key={r.id} className="border-b last:border-0">
-                          <td className="py-1.5">{r.bahan_baku.nama}</td>
+                          <td className="py-1.5">{r.bahan_baku?.nama ?? "-"}</td>
                           <td className="py-1.5 text-right font-medium">{formatNumber(r.qty)}</td>
-                          <td className="py-1.5 pl-2 text-muted-foreground">{r.bahan_baku.satuan}</td>
+                          <td className="py-1.5 pl-2 text-muted-foreground">{r.bahan_baku?.satuan ?? ""}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -344,7 +346,7 @@ export function RecipePage() {
           <form onSubmit={handleSubmit((d) => mutation.mutate(d as FormData))} className="space-y-4">
             {mutation.error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                {String(mutation.error)}
+                {getErrorMessage(mutation.error)}
               </div>
             )}
 

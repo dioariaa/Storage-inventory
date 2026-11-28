@@ -1,57 +1,51 @@
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { formatDate, formatNumber } from "@/lib/utils"
+import { supabase, fetchAllRows } from "@/lib/supabase"
+import { formatDate, formatNumber, today, daysAgo, cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { MutasiDashboard, SaldoBahanBaku, MutasiMenu } from "@/types/database"
 import { PackagePlus, PackageMinus, Archive, AlertTriangle, LayoutDashboard, Search } from "lucide-react"
-import { today, cn } from "@/lib/utils"
 import { PageHeader } from "@/components/common/PageHeader"
 
 export function DashboardPage() {
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    return d.toISOString().split("T")[0]
-  })
+  const [dateFrom, setDateFrom] = useState(() => daysAgo(30))
   const [dateTo, setDateTo] = useState(today)
   const [viewMode, setViewMode] = useState<"bahan" | "menu">("bahan")
   const [searchQuery, setSearchQuery] = useState("")
 
-  // Fetch mutasi menu
+  // Fetch mutasi menu (paginasi melewati limit 1000 baris PostgREST)
   const { data: mutasiMenu, isLoading: loadingMenu } = useQuery({
     queryKey: ["mutasi-menu", dateFrom, dateTo],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("v_mutasi_menu")
-        .select("*")
-        .gte("tgl_transaksi", dateFrom)
-        .lte("tgl_transaksi", dateTo)
-        .order("tgl_transaksi", { ascending: false })
-      if (error) throw error
-      return data as MutasiMenu[]
-    },
+    queryFn: () =>
+      fetchAllRows<MutasiMenu>((from, to) => {
+        let q = supabase.from("v_mutasi_menu").select("*")
+        if (dateFrom) q = q.gte("tgl_transaksi", dateFrom)
+        if (dateTo) q = q.lte("tgl_transaksi", dateTo)
+        return q
+          .order("tgl_transaksi", { ascending: false })
+          .order("penjualan_id", { ascending: false })
+          .order("menu_id", { ascending: false })
+          .range(from, to)
+      }),
   })
 
-  // Fetch mutasi
+  // Fetch mutasi (paginasi melewati limit 1000 baris PostgREST)
   const { data: mutasi, isLoading: loadingMutasi } = useQuery({
     queryKey: ["mutasi", dateFrom, dateTo],
-    queryFn: async () => {
-      let q = supabase
-        .from("v_mutasi_dashboard")
-        .select("*")
-        .gte("tgl_transaksi", dateFrom)
-        .lte("tgl_transaksi", dateTo)
-        .order("tgl_transaksi", { ascending: false })
-        .order("waktu_pencatatan", { ascending: false })
-
-      const { data, error } = await q
-      if (error) throw error
-      return data as MutasiDashboard[]
-    },
+    queryFn: () =>
+      fetchAllRows<MutasiDashboard>((from, to) => {
+        let q = supabase.from("v_mutasi_dashboard").select("*")
+        if (dateFrom) q = q.gte("tgl_transaksi", dateFrom)
+        if (dateTo) q = q.lte("tgl_transaksi", dateTo)
+        return q
+          .order("tgl_transaksi", { ascending: false })
+          .order("waktu_pencatatan", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)
+      }),
   })
 
   // Fetch saldo bahan baku untuk ringkasan
@@ -65,20 +59,6 @@ export function DashboardPage() {
         .order("nama")
       if (error) throw error
       return data as SaldoBahanBaku[]
-    },
-  })
-
-  // Fetch bahan baku list untuk filter
-  const { data: bahanList } = useQuery({
-    queryKey: ["bahan-baku-list"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bahan_baku")
-        .select("id, nama")
-        .eq("is_active", true)
-        .order("nama")
-      if (error) throw error
-      return data as { id: string; nama: string }[]
     },
   })
 
@@ -109,7 +89,7 @@ export function DashboardPage() {
   const totalIn = mutasi?.reduce((s, m) => s + (m.jenis === "IN" ? m.qty : 0), 0) ?? 0
   const totalOut = mutasi?.reduce((s, m) => s + (m.jenis === "OUT" ? m.qty : 0), 0) ?? 0
   const bahanMinimum = saldoList?.filter(
-    (s) => s.minimum_stok !== null && s.saldo_akhir <= (s.minimum_stok ?? 0)
+    (s) => s.minimum_stok !== null && s.minimum_stok > 0 && s.saldo_akhir <= s.minimum_stok
   )
 
   return (
@@ -401,7 +381,7 @@ function StatCard({ title, value, unit, icon: Icon, color = "gray" }: any) {
         <div>
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{title}</p>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black">{value ?? "0"}</span>
+            <span className="text-2xl font-black">{value !== undefined && value !== null ? formatNumber(value) : "0"}</span>
             <span className="text-xs text-muted-foreground">{unit}</span>
           </div>
         </div>
@@ -416,6 +396,7 @@ function SourceBadge({ source }: { source: string }) {
     MANUAL_OUT: { label: "OUT", variant: "secondary" },
     POS_IMPORT: { label: "POS", variant: "default" },
     MANUAL_SALE: { label: "SALE", variant: "warning" },
+    PRODUKSI: { label: "MASAK", variant: "default" },
   }
   const info = map[source] ?? { label: source, variant: "secondary" }
   return <Badge variant={info.variant} className="text-[10px] uppercase font-bold py-0 h-5">{info.label}</Badge>
