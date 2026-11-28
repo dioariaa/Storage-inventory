@@ -1,0 +1,487 @@
+-- ============================================================
+-- 017: REBUILD MASTER DATA BAR (BAHAN BAKU, MENU, & RECIPE)
+-- Sumber:
+--   - Menu: Menu Berlaris 2026.md (ejaan selaras POS iSeller CSV)
+--   - Bahan Baku: Print Form Inv Bar (81 item; 5 Arabica -> ALL ORIGIN; 3 bentrok Kitchen -> (BAR); stok_awal = 0)
+--   - Recipe: Excel Penggunaan Bar (perbaikan #8 Matcha, hapus baris yatim #38, Freshmilk Panas 180 / Dingin 150 / Milkshake 250 / Mont Blanc 10 / Caramel Macchiato 150 / Thai Tea tanpa Freshmilk)
+-- ============================================================
+
+-- 1. MASTER BAHAN BAKU BAR (81 item, stok_awal = 0)
+insert into public.bahan_baku (nama, satuan, stok_awal, minimum_stok, is_active, division, jenis)
+values
+  ('HOUSE BLEND PREMIO 50:50 @1000GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('BEANS ROBUSTA TEMANGGUNG @250GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('BEANS ARABICA (ALL ORIGIN)', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('POWDER DENALI MATCHA @900GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('POWDER DENALI AVOCADO @900GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('POWDER COKLAT MILO @946GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('POWDER COKLAT VANHOUTEN @165GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('POWDER CREAMER @800GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('THAI TEA CHATRAMUE @400GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('GOALPARA BLACK TEA @250GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('CHAMOMILE TEA @25BAG', 'KANTUNG', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('MANGGO TEA @25BAG', 'KANTUNG', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('PEPPERMINT TEA @25BAG', 'KANTUNG', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DENALI SIRUP LYCHEE @750ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DENALI SYRUP VANILA @750ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DENALI SYRUP HAZELNUT @750ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DENALI SIRUP BUTTERSCHOTCH @750ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DENALI SIRUP BLUE CITRUS @750 ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DENALI SIRUP PEPPERMINT @750ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DENALI SIRUP CARAMEL @750ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('GKC SIRUP TAMARIND', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('MARJAN COCOPANDAN @460 ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SIRUP TAMARIND 3 TEKO', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DIAMOND FRESHMILK @946GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('CARNATION SKM @365GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('F&N EVAPORASI @380 GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SANTAN KARA CAIR @200ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('MONALISA WHIPED CREAM @1L', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SEMANGKA', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('MELON', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('ALPUKAT @1KG', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('STRAWBERRY', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('NANAS', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('JERUK MEDAN', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('JERUK PERAS', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('JERUK NIPIS', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('LEMON', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('LYCHEE KALENG @565GR', 'BUAH', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SEREH (BAR)', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('TIMUN (BAR)', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('JAHE (BAR)', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DAUN MINT', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('NANGKA', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('TAPE', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('GULA PASIR PUTIH @1KG', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('GULA KRISTAL PUTIH SACHET @6GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('LUMP SUGAR GULA BATU @400GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('GULA AREN CIANJUR @ 1KG', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('GULA AREN STICK @6GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('TROPICANA SLIM CLASSIC @2,5GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DIAMOND VANILA ICE CREAM @8L', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DIAMOND STRAWBERRY ICE CREAM @8L', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('DIAMOND COKLAT ICE CREAM @8L', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('MORIN TOPPING COKLAT @310 GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('MORIN TOPPING STRAWBERRY @310 GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('MORIN TOPPING CARAMEL @310 GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('AMIDIS GALON @19L', 'GALON', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('AMIDIS BOTOL @600ML', 'BOTOL', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SCHWEPPSS BOTANICAL WATER @250ML', 'KALENG', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('HYDROCOCO @250ML', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('NATA DE COCO @1KG', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('YAKULT @65 ML', 'BOTOL', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('OREO CRUMB @990GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('CREAM CHARGES @10TABUNG', 'TABUNG', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('BIJI SELASIH KERING @100GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('ES BATU @15KG', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('PAPPER V 60 @100PCS', 'PCS', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('PLASTIK TAKE AWAY DOUBLE @100PCS', 'PCS', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('HOT CUP @8OZ', 'CUP', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('ICE CUP @16OZ', 'CUP', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SEDOTAN STERIL @500PCS', 'PCS', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SEDOTAN BUBLE @100PCS', 'PCS', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('KAYU MANIS @100GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('KAYU SECANG @500GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('ANIS STAR @100GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('CENGKEH @100GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('KAPULAGA @100GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('NUTRIJEL @15GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SAGU MUTIARA @100GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('KOLANG KALING @100GR', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU'),
+  ('SUNQUICK MANDARIN', 'GR', 0, null, true, 'bar', 'BAHAN_BAKU')
+on conflict (nama) do update set
+  satuan = excluded.satuan,
+  division = 'bar',
+  is_active = true;
+
+-- 2. MASTER MENU BAR (61 menu, selaras Menu Berlaris 2026.md + ejaan POS iSeller)
+insert into public.menu (nama, kategori, harga, is_active, division)
+values
+  -- Kopi Berlaris
+  ('Americano', 'Kopi Berlaris', 28000, true, 'bar'),
+  ('Espresso Single', 'Kopi Berlaris', 23000, true, 'bar'),
+  ('Espresso Double', 'Kopi Berlaris', 28000, true, 'bar'),
+  ('Long Black', 'Kopi Berlaris', 28000, true, 'bar'),
+  ('Cappuccino (Panas)', 'Kopi Berlaris', 35000, true, 'bar'),
+  ('Cappuccino (Dingin)', 'Kopi Berlaris', 35000, true, 'bar'),
+  ('Affogato', 'Kopi Berlaris', 33000, true, 'bar'),
+  ('Caffe latte (Panas)', 'Kopi Berlaris', 37000, true, 'bar'),
+  ('Caffe latte (Dingin)', 'Kopi Berlaris', 37000, true, 'bar'),
+  ('Mocha Latte (Panas)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Mocha Latte (Dingin)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Caramel latte (Panas)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Caramel latte (Dingin)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('CARAMEL MACCHIATO', 'Kopi Berlaris', 32000, true, 'bar'),
+  ('Butterscotch Latte (Panas)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Butterscotch Latte (Dingin)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Hazelnut Latte (Panas)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Hazelnut Latte (Dingin)', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Berlaris Palm Sugar Latte (Panas)', 'Kopi Berlaris', 35000, true, 'bar'),
+  ('Berlaris Palm Sugar Latte (Dingin)', 'Kopi Berlaris', 35000, true, 'bar'),
+  ('Italian Cream Coffee', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Mont Blanc', 'Kopi Berlaris', 38000, true, 'bar'),
+  ('Extra Shoot', 'Kopi Berlaris', 15000, true, 'bar'),
+  -- Manual Brew
+  ('V60', 'Manual Brew', 35000, true, 'bar'),
+  ('Vietnam Drip', 'Manual Brew', 35000, true, 'bar'),
+  ('Japanese Ice', 'Manual Brew', 35000, true, 'bar'),
+  ('Kopi Tubruk', 'Manual Brew', 28000, true, 'bar'),
+  -- Teh Berlaris
+  ('Teh Manis', 'Teh Berlaris', 17000, true, 'bar'),
+  ('Teh Tawar', 'Teh Berlaris', 17000, true, 'bar'),
+  ('Lemon Tea', 'Teh Berlaris', 28000, true, 'bar'),
+  ('Lychee Tea', 'Teh Berlaris', 32000, true, 'bar'),
+  ('TAMARIND TEA', 'Teh Berlaris', 32000, true, 'bar'),
+  ('Thai Tea', 'Teh Berlaris', 30000, true, 'bar'),
+  ('Lemon Grass Tea', 'Teh Berlaris', 30000, true, 'bar'),
+  ('Chamomile', 'Teh Berlaris', 30000, true, 'bar'),
+  -- Wedang
+  ('Wedang Jahe', 'Wedang', 28000, true, 'bar'),
+  ('Wedang Uwuh', 'Wedang', 28000, true, 'bar'),
+  -- Coklat
+  ('Dark Chocolate (Panas)', 'Coklat', 33000, true, 'bar'),
+  ('Dark Chocolate (Dingin)', 'Coklat', 33000, true, 'bar'),
+  ('Chocolate Peppermint (Panas)', 'Coklat', 35000, true, 'bar'),
+  ('Chocolate Peppermint (Dingin)', 'Coklat', 35000, true, 'bar'),
+  ('Coklat Hazelnut (Panas)', 'Coklat', 35000, true, 'bar'),
+  ('Coklat Hazelnut (Dingin)', 'Coklat', 35000, true, 'bar'),
+  -- Matcha
+  ('Matcha Lattee (Panas)', 'Matcha', 35000, true, 'bar'),
+  ('Matcha Lattee (Dingin)', 'Matcha', 35000, true, 'bar'),
+  ('Matcha Milkshake', 'Matcha', 35000, true, 'bar'),
+  -- Milkshake
+  ('Milkshake Coklat', 'Milkshake', 38000, true, 'bar'),
+  ('Milkshake Vanilla', 'Milkshake', 38000, true, 'bar'),
+  ('Milkshake Stroberi', 'Milkshake', 38000, true, 'bar'),
+  ('Milkshake Oreo', 'Milkshake', 40000, true, 'bar'),
+  -- Non-Coffee
+  ('Es Timun Serut', 'Non-Coffee', 35000, true, 'bar'),
+  ('Refreshing Cocofruit', 'Non-Coffee', 35000, true, 'bar'),
+  ('Mineral Water', 'Non-Coffee', 15000, true, 'bar'),
+  -- Jus
+  ('Jus Jeruk', 'Jus', 30000, true, 'bar'),
+  ('Jus Stroberi', 'Jus', 30000, true, 'bar'),
+  ('Jus Semangka', 'Jus', 30000, true, 'bar'),
+  ('Jus Alpukat', 'Jus', 30000, true, 'bar'),
+  -- Tutuplah Dengan Yang Manis (Dessert Bar)
+  ('Es Campur Berlaris', 'Tutuplah Dengan Yang Manis', 35000, true, 'bar'),
+  ('Es Krim - Coklat', 'Tutuplah Dengan Yang Manis', 40000, true, 'bar'),
+  ('Es Krim - Vanilla', 'Tutuplah Dengan Yang Manis', 40000, true, 'bar'),
+  ('Es Krim - Strawberry', 'Tutuplah Dengan Yang Manis', 40000, true, 'bar')
+on conflict (nama) do update set
+  kategori = excluded.kategori,
+  harga = excluded.harga,
+  division = 'bar',
+  is_active = true;
+
+-- 3. MASTER RECIPE BAR
+insert into public.recipe (menu_id, bahan_baku_id, qty)
+select m.id, b.id, v.qty
+from (values
+  -- Americano, Espresso, Long Black, Extra Shoot, Kopi Tubruk
+  ('Americano', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Espresso Single', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Espresso Double', 'HOUSE BLEND PREMIO 50:50 @1000GR', 16.0),
+  ('Long Black', 'HOUSE BLEND PREMIO 50:50 @1000GR', 16.0),
+  ('Extra Shoot', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Kopi Tubruk', 'HOUSE BLEND PREMIO 50:50 @1000GR', 12.0),
+
+  -- Affogato
+  ('Affogato', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Affogato', 'DIAMOND VANILA ICE CREAM @8L', 60.0),
+
+  -- Cappuccino (Panas / Dingin)
+  ('Cappuccino (Panas)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 16.0),
+  ('Cappuccino (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Cappuccino (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Cappuccino (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Cappuccino (Dingin)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 16.0),
+  ('Cappuccino (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Cappuccino (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Cappuccino (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Caffe latte (Panas / Dingin)
+  ('Caffe latte (Panas)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Caffe latte (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Caffe latte (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Caffe latte (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Caffe latte (Dingin)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Caffe latte (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Caffe latte (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Caffe latte (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Mocha Latte (Panas / Dingin)
+  ('Mocha Latte (Panas)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Mocha Latte (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Mocha Latte (Panas)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Mocha Latte (Panas)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Mocha Latte (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Mocha Latte (Panas)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Mocha Latte (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Mocha Latte (Dingin)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Mocha Latte (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Mocha Latte (Dingin)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Mocha Latte (Dingin)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Mocha Latte (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Mocha Latte (Dingin)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Mocha Latte (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Caramel latte (Panas / Dingin)
+  ('Caramel latte (Panas)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Caramel latte (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Caramel latte (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Caramel latte (Panas)', 'DENALI SIRUP CARAMEL @750ML', 30.0),
+  ('Caramel latte (Panas)', 'MORIN TOPPING CARAMEL @310 GR', 15.0),
+  ('Caramel latte (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Caramel latte (Dingin)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Caramel latte (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Caramel latte (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Caramel latte (Dingin)', 'DENALI SIRUP CARAMEL @750ML', 30.0),
+  ('Caramel latte (Dingin)', 'MORIN TOPPING CARAMEL @310 GR', 15.0),
+  ('Caramel latte (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- CARAMEL MACCHIATO
+  ('CARAMEL MACCHIATO', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('CARAMEL MACCHIATO', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('CARAMEL MACCHIATO', 'DENALI SIRUP CARAMEL @750ML', 30.0),
+  ('CARAMEL MACCHIATO', 'MORIN TOPPING CARAMEL @310 GR', 15.0),
+
+  -- Butterscotch Latte (Panas / Dingin)
+  ('Butterscotch Latte (Panas)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Butterscotch Latte (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Butterscotch Latte (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Butterscotch Latte (Panas)', 'DENALI SIRUP BUTTERSCHOTCH @750ML', 30.0),
+  ('Butterscotch Latte (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Butterscotch Latte (Dingin)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Butterscotch Latte (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Butterscotch Latte (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Butterscotch Latte (Dingin)', 'DENALI SIRUP BUTTERSCHOTCH @750ML', 30.0),
+  ('Butterscotch Latte (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Hazelnut Latte (Panas / Dingin)
+  ('Hazelnut Latte (Panas)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Hazelnut Latte (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Hazelnut Latte (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Hazelnut Latte (Panas)', 'DENALI SYRUP HAZELNUT @750ML', 30.0),
+  ('Hazelnut Latte (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Hazelnut Latte (Dingin)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Hazelnut Latte (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Hazelnut Latte (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Hazelnut Latte (Dingin)', 'DENALI SYRUP HAZELNUT @750ML', 30.0),
+  ('Hazelnut Latte (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Berlaris Palm Sugar Latte (Panas / Dingin)
+  ('Berlaris Palm Sugar Latte (Panas)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Berlaris Palm Sugar Latte (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Berlaris Palm Sugar Latte (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Berlaris Palm Sugar Latte (Panas)', 'F&N EVAPORASI @380 GR', 15.0),
+  ('Berlaris Palm Sugar Latte (Panas)', 'GULA AREN CIANJUR @ 1KG', 30.0),
+  ('Berlaris Palm Sugar Latte (Dingin)', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Berlaris Palm Sugar Latte (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Berlaris Palm Sugar Latte (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Berlaris Palm Sugar Latte (Dingin)', 'F&N EVAPORASI @380 GR', 15.0),
+  ('Berlaris Palm Sugar Latte (Dingin)', 'GULA AREN CIANJUR @ 1KG', 30.0),
+
+  -- Italian Cream Coffee
+  ('Italian Cream Coffee', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Italian Cream Coffee', 'MONALISA WHIPED CREAM @1L', 40.0),
+  ('Italian Cream Coffee', 'DENALI SYRUP VANILA @750ML', 15.0),
+  ('Italian Cream Coffee', 'DIAMOND VANILA ICE CREAM @8L', 60.0),
+
+  -- Mont Blanc (Freshmilk 10ml/gr)
+  ('Mont Blanc', 'HOUSE BLEND PREMIO 50:50 @1000GR', 9.0),
+  ('Mont Blanc', 'DIAMOND FRESHMILK @946GR', 10.0),
+  ('Mont Blanc', 'MONALISA WHIPED CREAM @1L', 30.0),
+  ('Mont Blanc', 'DENALI SYRUP VANILA @750ML', 20.0),
+  ('Mont Blanc', 'SUNQUICK MANDARIN', 20.0),
+
+  -- Manual Brew
+  ('V60', 'BEANS ARABICA (ALL ORIGIN)', 12.0),
+  ('V60', 'PAPPER V 60 @100PCS', 1.0),
+  ('Japanese Ice', 'BEANS ARABICA (ALL ORIGIN)', 12.0),
+  ('Japanese Ice', 'PAPPER V 60 @100PCS', 1.0),
+  ('Vietnam Drip', 'BEANS ROBUSTA TEMANGGUNG @250GR', 12.0),
+  ('Vietnam Drip', 'CARNATION SKM @365GR', 30.0),
+
+  -- Teh Berlaris
+  ('Teh Manis', 'GOALPARA BLACK TEA @250GR', 2.5),
+  ('Teh Manis', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Teh Tawar', 'GOALPARA BLACK TEA @250GR', 2.5),
+  ('Lemon Tea', 'GOALPARA BLACK TEA @250GR', 2.5),
+  ('Lemon Tea', 'JERUK NIPIS', 60.0),
+  ('Lemon Tea', 'LEMON', 10.0),
+  ('Lemon Tea', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Lychee Tea', 'GOALPARA BLACK TEA @250GR', 2.5),
+  ('Lychee Tea', 'DENALI SIRUP LYCHEE @750ML', 30.0),
+  ('Lychee Tea', 'LYCHEE KALENG @565GR', 2.0),
+  ('Lychee Tea', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('TAMARIND TEA', 'GOALPARA BLACK TEA @250GR', 2.5),
+  ('TAMARIND TEA', 'GKC SIRUP TAMARIND', 15.0),
+  ('TAMARIND TEA', 'SIRUP TAMARIND 3 TEKO', 15.0),
+  ('TAMARIND TEA', 'JERUK NIPIS', 10.0),
+  ('TAMARIND TEA', 'LEMON', 10.0),
+  ('TAMARIND TEA', 'GULA PASIR PUTIH @1KG', 30.0),
+  -- Thai Tea (TIDAK memakai Freshmilk)
+  ('Thai Tea', 'THAI TEA CHATRAMUE @400GR', 10.0),
+  ('Thai Tea', 'POWDER CREAMER @800GR', 10.0),
+  ('Thai Tea', 'CARNATION SKM @365GR', 30.0),
+  ('Thai Tea', 'F&N EVAPORASI @380 GR', 30.0),
+  -- Lemon Grass Tea
+  ('Lemon Grass Tea', 'GOALPARA BLACK TEA @250GR', 2.5),
+  ('Lemon Grass Tea', 'DENALI SYRUP VANILA @750ML', 30.0),
+  ('Lemon Grass Tea', 'LEMON', 70.0),
+  ('Lemon Grass Tea', 'JERUK NIPIS', 60.0),
+  ('Lemon Grass Tea', 'SEREH (BAR)', 30.0),
+  ('Lemon Grass Tea', 'GULA PASIR PUTIH @1KG', 30.0),
+  -- Chamomile
+  ('Chamomile', 'CHAMOMILE TEA @25BAG', 1.0),
+  ('Chamomile', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Wedang
+  ('Wedang Jahe', 'JAHE (BAR)', 60.0),
+  ('Wedang Uwuh', 'LUMP SUGAR GULA BATU @400GR', 30.0),
+  ('Wedang Uwuh', 'JAHE (BAR)', 60.0),
+  ('Wedang Uwuh', 'KAYU MANIS @100GR', 20.0),
+  ('Wedang Uwuh', 'CENGKEH @100GR', 5.0),
+  ('Wedang Uwuh', 'KAPULAGA @100GR', 5.0),
+  ('Wedang Uwuh', 'KAYU SECANG @500GR', 5.0),
+  ('Wedang Uwuh', 'ANIS STAR @100GR', 5.0),
+
+  -- Coklat (Panas / Dingin)
+  ('Dark Chocolate (Panas)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Dark Chocolate (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Dark Chocolate (Panas)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Dark Chocolate (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Dark Chocolate (Panas)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Dark Chocolate (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Dark Chocolate (Dingin)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Dark Chocolate (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Dark Chocolate (Dingin)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Dark Chocolate (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Dark Chocolate (Dingin)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Dark Chocolate (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  ('Chocolate Peppermint (Panas)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Chocolate Peppermint (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Chocolate Peppermint (Panas)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Chocolate Peppermint (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Chocolate Peppermint (Panas)', 'DENALI SIRUP PEPPERMINT @750ML', 30.0),
+  ('Chocolate Peppermint (Panas)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Chocolate Peppermint (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Chocolate Peppermint (Dingin)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Chocolate Peppermint (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Chocolate Peppermint (Dingin)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Chocolate Peppermint (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Chocolate Peppermint (Dingin)', 'DENALI SIRUP PEPPERMINT @750ML', 30.0),
+  ('Chocolate Peppermint (Dingin)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Chocolate Peppermint (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  ('Coklat Hazelnut (Panas)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Coklat Hazelnut (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Coklat Hazelnut (Panas)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Coklat Hazelnut (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Coklat Hazelnut (Panas)', 'DENALI SYRUP HAZELNUT @750ML', 30.0),
+  ('Coklat Hazelnut (Panas)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Coklat Hazelnut (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Coklat Hazelnut (Dingin)', 'POWDER COKLAT VANHOUTEN @165GR', 10.0),
+  ('Coklat Hazelnut (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Coklat Hazelnut (Dingin)', 'POWDER COKLAT MILO @946GR', 10.0),
+  ('Coklat Hazelnut (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Coklat Hazelnut (Dingin)', 'DENALI SYRUP HAZELNUT @750ML', 30.0),
+  ('Coklat Hazelnut (Dingin)', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Coklat Hazelnut (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Matcha (perbaikan #8 -> POWDER DENALI MATCHA)
+  ('Matcha Lattee (Panas)', 'POWDER DENALI MATCHA @900GR', 20.0),
+  ('Matcha Lattee (Panas)', 'POWDER CREAMER @800GR', 10.0),
+  ('Matcha Lattee (Panas)', 'DIAMOND FRESHMILK @946GR', 180.0),
+  ('Matcha Lattee (Panas)', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Matcha Lattee (Dingin)', 'POWDER DENALI MATCHA @900GR', 20.0),
+  ('Matcha Lattee (Dingin)', 'POWDER CREAMER @800GR', 10.0),
+  ('Matcha Lattee (Dingin)', 'DIAMOND FRESHMILK @946GR', 150.0),
+  ('Matcha Lattee (Dingin)', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  ('Matcha Milkshake', 'POWDER DENALI MATCHA @900GR', 20.0),
+  ('Matcha Milkshake', 'DIAMOND FRESHMILK @946GR', 250.0),
+  ('Matcha Milkshake', 'MONALISA WHIPED CREAM @1L', 90.0),
+  ('Matcha Milkshake', 'DIAMOND VANILA ICE CREAM @8L', 150.0),
+  ('Matcha Milkshake', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Milkshake (Freshmilk 250gr)
+  ('Milkshake Coklat', 'DIAMOND FRESHMILK @946GR', 250.0),
+  ('Milkshake Coklat', 'MONALISA WHIPED CREAM @1L', 90.0),
+  ('Milkshake Coklat', 'DIAMOND COKLAT ICE CREAM @8L', 150.0),
+  ('Milkshake Coklat', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Milkshake Coklat', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  ('Milkshake Vanilla', 'DIAMOND FRESHMILK @946GR', 250.0),
+  ('Milkshake Vanilla', 'MONALISA WHIPED CREAM @1L', 90.0),
+  ('Milkshake Vanilla', 'DIAMOND VANILA ICE CREAM @8L', 150.0),
+  ('Milkshake Vanilla', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  ('Milkshake Stroberi', 'DIAMOND FRESHMILK @946GR', 250.0),
+  ('Milkshake Stroberi', 'MONALISA WHIPED CREAM @1L', 90.0),
+  ('Milkshake Stroberi', 'DIAMOND STRAWBERRY ICE CREAM @8L', 150.0),
+  ('Milkshake Stroberi', 'MORIN TOPPING STRAWBERRY @310 GR', 15.0),
+  ('Milkshake Stroberi', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  ('Milkshake Oreo', 'DIAMOND FRESHMILK @946GR', 250.0),
+  ('Milkshake Oreo', 'MONALISA WHIPED CREAM @1L', 90.0),
+  ('Milkshake Oreo', 'DIAMOND VANILA ICE CREAM @8L', 150.0),
+  ('Milkshake Oreo', 'OREO CRUMB @990GR', 50.0),
+  ('Milkshake Oreo', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Non-Coffee
+  ('Es Timun Serut', 'DENALI SYRUP VANILA @750ML', 30.0),
+  ('Es Timun Serut', 'TIMUN (BAR)', 100.0),
+  ('Es Timun Serut', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Es Timun Serut', 'NATA DE COCO @1KG', 30.0),
+  ('Es Timun Serut', 'BIJI SELASIH KERING @100GR', 5.0),
+
+  ('Refreshing Cocofruit', 'DENALI SIRUP LYCHEE @750ML', 30.0),
+  ('Refreshing Cocofruit', 'LYCHEE KALENG @565GR', 2.0),
+  ('Refreshing Cocofruit', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Refreshing Cocofruit', 'NATA DE COCO @1KG', 30.0),
+  ('Refreshing Cocofruit', 'HYDROCOCO @250ML', 100.0),
+  ('Refreshing Cocofruit', 'YAKULT @65 ML', 1.0),
+
+  ('Mineral Water', 'AMIDIS BOTOL @600ML', 1.0),
+
+  -- Jus
+  ('Jus Jeruk', 'JERUK MEDAN', 200.0),
+  ('Jus Jeruk', 'JERUK PERAS', 100.0),
+  ('Jus Jeruk', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Jus Stroberi', 'STRAWBERRY', 150.0),
+  ('Jus Stroberi', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Jus Semangka', 'SEMANGKA', 350.0),
+  ('Jus Semangka', 'GULA PASIR PUTIH @1KG', 30.0),
+  ('Jus Alpukat', 'ALPUKAT @1KG', 100.0),
+  ('Jus Alpukat', 'CARNATION SKM @365GR', 30.0),
+  ('Jus Alpukat', 'MORIN TOPPING COKLAT @310 GR', 30.0),
+  ('Jus Alpukat', 'GULA PASIR PUTIH @1KG', 30.0),
+
+  -- Dessert Bar
+  ('Es Campur Berlaris', 'CARNATION SKM @365GR', 30.0),
+  ('Es Campur Berlaris', 'F&N EVAPORASI @380 GR', 15.0),
+  ('Es Campur Berlaris', 'MARJAN COCOPANDAN @460 ML', 30.0),
+  ('Es Campur Berlaris', 'NATA DE COCO @1KG', 30.0),
+  ('Es Campur Berlaris', 'NUTRIJEL @15GR', 50.0),
+  ('Es Campur Berlaris', 'KOLANG KALING @100GR', 50.0),
+  ('Es Campur Berlaris', 'SAGU MUTIARA @100GR', 70.0),
+  ('Es Campur Berlaris', 'NANGKA', 40.0),
+  ('Es Campur Berlaris', 'TAPE', 50.0),
+  ('Es Campur Berlaris', 'SANTAN KARA CAIR @200ML', 30.0),
+
+  ('Es Krim - Coklat', 'DIAMOND COKLAT ICE CREAM @8L', 150.0),
+  ('Es Krim - Coklat', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Es Krim - Vanilla', 'DIAMOND VANILA ICE CREAM @8L', 150.0),
+  ('Es Krim - Vanilla', 'MORIN TOPPING COKLAT @310 GR', 15.0),
+  ('Es Krim - Strawberry', 'DIAMOND STRAWBERRY ICE CREAM @8L', 150.0),
+  ('Es Krim - Strawberry', 'MORIN TOPPING STRAWBERRY @310 GR', 15.0)
+) as v(menu_nama, bahan_nama, qty)
+join public.menu m on m.nama = v.menu_nama and m.division = 'bar'
+join public.bahan_baku b on b.nama = v.bahan_nama and b.division = 'bar'
+on conflict (menu_id, bahan_baku_id) do update set qty = excluded.qty;
+
+notify pgrst, 'reload schema';

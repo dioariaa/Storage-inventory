@@ -12,8 +12,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { Plus, Trash2, PackagePlus } from "lucide-react"
+import { Plus, Trash2, PackagePlus, Upload, ClipboardEdit } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
+import { BarangMasukImport } from "@/components/barang-masuk/BarangMasukImport"
 import type { BahanBaku } from "@/types/database"
 
 const schema = z.object({
@@ -34,6 +35,8 @@ type FormData = z.infer<typeof schema>
 export function BarangMasukPage() {
   const { profile } = useAuthStore()
   const queryClient = useQueryClient()
+  const [mode, setMode] = useState<"manual" | "import">("manual")
+  const [divFilter, setDivFilter] = useState<"all" | "bar" | "kitchen">("all")
   const [success, setSuccess] = useState(false)
 
   const { data: bahanList } = useQuery({
@@ -48,6 +51,10 @@ export function BarangMasukPage() {
       return data as BahanBaku[]
     },
   })
+
+  const filteredBahan = (bahanList ?? []).filter(
+    (b) => divFilter === "all" || b.division === divFilter
+  )
 
   const {
     register,
@@ -72,59 +79,80 @@ export function BarangMasukPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // 1. Gabungkan item duplikat dan ambil saldo fresh setiap bahan baku
-      const qtyByBahan = new Map<string, number>()
-      for (const item of data.items) {
-        qtyByBahan.set(item.bahan_baku_id, (qtyByBahan.get(item.bahan_baku_id) ?? 0) + item.qty)
-      }
-      const uniqueIds = [...qtyByBahan.keys()]
-      const saldoMap: Record<string, number> = {}
-      for (const bahanId of uniqueIds) {
-        const { data: saldo, error: saldoErr } = await supabase.rpc("get_saldo_bahan", {
-          p_bahan_baku_id: bahanId,
-        } as any)
-        if (saldoErr) throw saldoErr
-        saldoMap[bahanId] = Number(saldo ?? 0)
-      }
-
-      // 2. Buat transaksi header
-      const { data: trx, error: trxErr } = await supabase
-        .from("transaksi")
-        .insert({
-          tgl_transaksi: data.tgl_transaksi,
-          jenis: "IN",
-          sumber: "MANUAL_IN",
-          catatan: data.catatan || null,
-          is_posted: true,
-          posted_at: new Date().toISOString(),
-          created_by: profile?.id,
-        } as any)
-        .select()
-        .single()
-
-      if (trxErr) throw trxErr
-
-      // 3. Buat detail (running saldo akurat meski user memilih bahan sama 2x)
-      const runningSaldo = { ...saldoMap }
-      const details = data.items.map((item) => {
-        const before = runningSaldo[item.bahan_baku_id]
-        const after = before + item.qty
-        runningSaldo[item.bahan_baku_id] = after
-        return {
-          transaksi_id: (trx as any).id,
-          bahan_baku_id: item.bahan_baku_id,
-          qty: item.qty,
-          saldo_sebelum: before,
-          saldo_sesudah: after,
-        }
+      // Coba RPC atomik 018 dulu; fallback ke insert standar bila migrasi 018 belum dijalankan
+      const rpcRes = await (supabase as any).rpc("catat_transaksi_manual", {
+        p_tanggal: data.tgl_transaksi,
+        p_jenis: "IN",
+        p_alasan_out: null,
+        p_catatan: data.catatan || null,
+        p_items: data.items.map((i) => ({ bahan_baku_id: i.bahan_baku_id, qty: i.qty })),
       })
 
-      const { error: detErr } = await supabase.from("transaksi_detail").insert(details as any)
-      if (detErr) throw detErr
+      if (rpcRes.error) {
+        const msg = String(rpcRes.error.message ?? "")
+        const missingFn =
+          rpcRes.error.code === "PGRST202" ||
+          rpcRes.error.code === "42883" ||
+          msg.includes("catat_transaksi_manual")
+        if (!missingFn) throw rpcRes.error
+
+        // 1. Gabungkan item duplikat dan ambil saldo fresh setiap bahan baku
+        const qtyByBahan = new Map<string, number>()
+        for (const item of data.items) {
+          qtyByBahan.set(item.bahan_baku_id, (qtyByBahan.get(item.bahan_baku_id) ?? 0) + item.qty)
+        }
+        const uniqueIds = [...qtyByBahan.keys()]
+        const saldoMap: Record<string, number> = {}
+        for (const bahanId of uniqueIds) {
+          const { data: saldo, error: saldoErr } = await supabase.rpc("get_saldo_bahan", {
+            p_bahan_baku_id: bahanId,
+          } as any)
+          if (saldoErr) throw saldoErr
+          saldoMap[bahanId] = Number(saldo ?? 0)
+        }
+
+        // 2. Buat transaksi header
+        const { data: trx, error: trxErr } = await supabase
+          .from("transaksi")
+          .insert({
+            tgl_transaksi: data.tgl_transaksi,
+            jenis: "IN",
+            sumber: "MANUAL_IN",
+            catatan: data.catatan || null,
+            is_posted: true,
+            posted_at: new Date().toISOString(),
+            created_by: profile?.id,
+          } as any)
+          .select()
+          .single()
+
+        if (trxErr) throw trxErr
+
+        // 3. Buat detail (running saldo akurat meski user memilih bahan sama 2x)
+        const runningSaldo = { ...saldoMap }
+        const details = data.items.map((item) => {
+          const before = runningSaldo[item.bahan_baku_id]
+          const after = before + item.qty
+          runningSaldo[item.bahan_baku_id] = after
+          return {
+            transaksi_id: (trx as any).id,
+            bahan_baku_id: item.bahan_baku_id,
+            qty: item.qty,
+            saldo_sebelum: before,
+            saldo_sesudah: after,
+          }
+        })
+
+        const { error: detErr } = await supabase.from("transaksi_detail").insert(details as any)
+        if (detErr) throw detErr
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mutasi"] })
       queryClient.invalidateQueries({ queryKey: ["saldo-bahan-baku"] })
+      queryClient.invalidateQueries({ queryKey: ["riwayat"] })
+      queryClient.invalidateQueries({ queryKey: ["rekap-mutasi"] })
+      queryClient.invalidateQueries({ queryKey: ["variance-details"] })
       setSuccess(true)
       reset({ tgl_transaksi: today(), catatan: "", items: [{ bahan_baku_id: "", qty: 0 }] })
       setTimeout(() => setSuccess(false), 3000)
@@ -134,128 +162,172 @@ export function BarangMasukPage() {
   const watchedItems = watch("items")
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className={mode === "import" ? "space-y-6" : "max-w-2xl space-y-6"}>
       <PageHeader
         icon={PackagePlus}
         title="Barang Masuk (IN)"
-        description="Catat penambahan stok bahan baku"
+        description="Catat penambahan stok bahan baku secara manual atau import dari Excel Request Order (PO)"
       />
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 text-sm">
-          ✓ Transaksi barang masuk berhasil disimpan.
-        </div>
-      )}
+      {/* Mode Toggle */}
+      <div className="grid grid-cols-2 sm:flex gap-2">
+        <Button
+          type="button"
+          variant={mode === "manual" ? "default" : "outline"}
+          className="h-11 gap-2"
+          onClick={() => setMode("manual")}
+        >
+          <ClipboardEdit className="h-4 w-4" /> Input Manual
+        </Button>
+        <Button
+          type="button"
+          variant={mode === "import" ? "default" : "outline"}
+          className="h-11 gap-2"
+          onClick={() => setMode("import")}
+        >
+          <Upload className="h-4 w-4" /> Import Excel PO
+        </Button>
+      </div>
 
-      {mutation.error && (
-        <div className="bg-destructive/10 text-destructive rounded-lg p-4 text-sm">
-          Gagal menyimpan: {getErrorMessage(mutation.error)}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d as FormData))} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Informasi Transaksi</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Tanggal Transaksi</Label>
-              <Input type="date" {...register("tgl_transaksi")} />
-              {errors.tgl_transaksi && (
-                <p className="text-xs text-destructive">{errors.tgl_transaksi.message}</p>
-              )}
+      {mode === "import" ? (
+        <BarangMasukImport />
+      ) : (
+        <>
+          {success && (
+            <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 text-sm">
+              ✓ Transaksi barang masuk berhasil disimpan.
             </div>
-            <div className="space-y-1.5">
-              <Label>Catatan (opsional)</Label>
-              <Textarea placeholder="Keterangan tambahan..." {...register("catatan")} rows={2} />
-            </div>
-          </CardContent>
-        </Card>
+          )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Daftar Bahan Masuk</CardTitle>
-            <CardDescription>Tambahkan satu atau lebih bahan baku</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {fields.map((field, index) => (
-              <div key={field.id} className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-end">
-                <div className="flex-1 space-y-1.5">
-                  {index === 0 && <Label>Bahan Baku</Label>}
-                  <SearchableSelect
-                    value={watchedItems[index]?.bahan_baku_id ?? ""}
-                    onChange={(v) => setValue(`items.${index}.bahan_baku_id`, v)}
-                    options={(bahanList ?? []).map((b) => ({ id: b.id, label: b.nama, hint: b.satuan }))}
-                    placeholder="Pilih bahan baku..."
-                    emptyText="Bahan baku tidak ditemukan"
-                  />
-                  {errors.items?.[index]?.bahan_baku_id && (
-                    <p className="text-xs text-destructive">{errors.items[index]?.bahan_baku_id?.message}</p>
+          {mutation.error && (
+            <div className="bg-destructive/10 text-destructive rounded-lg p-4 text-sm">
+              Gagal menyimpan: {getErrorMessage(mutation.error)}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit((d) => mutation.mutate(d as FormData))} className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Informasi Transaksi</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label>Tanggal Transaksi</Label>
+                  <Input type="date" {...register("tgl_transaksi")} />
+                  {errors.tgl_transaksi && (
+                    <p className="text-xs text-destructive">{errors.tgl_transaksi.message}</p>
                   )}
                 </div>
-                <div className="w-full sm:w-36 space-y-1.5">
-                  {index === 0 && <Label>Jumlah</Label>}
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="0"
-                      className="h-11"
-                      {...register(`items.${index}.qty`)}
-                    />
-                    <span className="text-xs text-muted-foreground w-10 shrink-0">
-                      {getSatuan(watchedItems[index]?.bahan_baku_id)}
-                    </span>
+                <div className="space-y-1.5">
+                  <Label>Catatan (opsional)</Label>
+                  <Textarea placeholder="Keterangan tambahan..." {...register("catatan")} rows={2} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">Daftar Bahan Masuk</CardTitle>
+                    <CardDescription>Tambahkan satu atau lebih bahan baku</CardDescription>
                   </div>
-                  {errors.items?.[index]?.qty && (
-                    <p className="text-xs text-destructive">{errors.items[index]?.qty?.message}</p>
-                  )}
+                  <div className="flex gap-1.5">
+                    {(["all", "bar", "kitchen"] as const).map((d) => (
+                      <Button
+                        key={d}
+                        type="button"
+                        size="sm"
+                        variant={divFilter === d ? "default" : "outline"}
+                        className="h-8 text-xs"
+                        onClick={() => setDivFilter(d)}
+                      >
+                        {d === "all" ? "Semua" : d === "bar" ? "Bar" : "Kitchen"}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-end">
+                    <div className="flex-1 space-y-1.5">
+                      {index === 0 && <Label>Bahan Baku</Label>}
+                      <SearchableSelect
+                        value={watchedItems[index]?.bahan_baku_id ?? ""}
+                        onChange={(v) => setValue(`items.${index}.bahan_baku_id`, v)}
+                        options={filteredBahan.map((b) => ({ id: b.id, label: b.nama, hint: b.satuan }))}
+                        placeholder="Pilih bahan baku..."
+                        emptyText="Bahan baku tidak ditemukan"
+                      />
+                      {errors.items?.[index]?.bahan_baku_id && (
+                        <p className="text-xs text-destructive">{errors.items[index]?.bahan_baku_id?.message}</p>
+                      )}
+                    </div>
+                    <div className="w-full sm:w-36 space-y-1.5">
+                      {index === 0 && <Label>Jumlah</Label>}
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          placeholder="0"
+                          className="h-11"
+                          {...register(`items.${index}.qty`)}
+                        />
+                        <span className="text-xs text-muted-foreground w-10 shrink-0">
+                          {getSatuan(watchedItems[index]?.bahan_baku_id)}
+                        </span>
+                      </div>
+                      {errors.items?.[index]?.qty && (
+                        <p className="text-xs text-destructive">{errors.items[index]?.qty?.message}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive mb-0.5 self-end h-11 w-11 sm:h-10 sm:w-10"
+                      onClick={() => remove(index)}
+                      disabled={fields.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive mb-0.5 self-end h-11 w-11 sm:h-10 sm:w-10"
-                  onClick={() => remove(index)}
-                  disabled={fields.length === 1}
+                  variant="outline"
+                  size="sm"
+                  className="h-11 w-full sm:w-auto"
+                  onClick={() => append({ bahan_baku_id: "", qty: 0 })}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Plus className="h-4 w-4 mr-1" />
+                  Tambah Bahan
                 </Button>
-              </div>
-            ))}
+                {errors.items?.root && (
+                  <p className="text-xs text-destructive">{errors.items.root.message}</p>
+                )}
+              </CardContent>
+            </Card>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-11 w-full sm:w-auto"
-              onClick={() => append({ bahan_baku_id: "", qty: 0 })}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Tambah Bahan
-            </Button>
-            {errors.items?.root && (
-              <p className="text-xs text-destructive">{errors.items.root.message}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 w-full sm:w-auto"
-            onClick={() => reset({ tgl_transaksi: today(), catatan: "", items: [{ bahan_baku_id: "", qty: 0 }] })}
-          >
-            Reset
-          </Button>
-          <Button type="submit" className="h-11 w-full sm:w-auto" disabled={mutation.isPending}>
-            {mutation.isPending ? "Menyimpan..." : "Simpan Transaksi IN"}
-          </Button>
-        </div>
-      </form>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full sm:w-auto"
+                onClick={() => reset({ tgl_transaksi: today(), catatan: "", items: [{ bahan_baku_id: "", qty: 0 }] })}
+              >
+                Reset
+              </Button>
+              <Button type="submit" className="h-11 w-full sm:w-auto" disabled={mutation.isPending}>
+                {mutation.isPending ? "Menyimpan..." : "Simpan Transaksi IN"}
+              </Button>
+            </div>
+          </form>
+        </>
+      )}
     </div>
   )
 }

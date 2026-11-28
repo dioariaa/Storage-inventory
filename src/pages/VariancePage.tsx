@@ -138,8 +138,12 @@ export function VariancePage() {
 
   const rows: RowResult[] = useMemo(() => {
     if (!fileRows.length || !bahanList || !details) return []
+    const barBahan = bahanList.filter((b) => b.division === "bar")
     return fileRows.map((fr) => {
-      const bahan = findBahanMatch(fr.nama, bahanList)
+      const bahan =
+        detectedFormat === "opname_bar"
+          ? findBahanMatch(fr.nama, barBahan) ?? findBahanMatch(fr.nama, bahanList)
+          : findBahanMatch(fr.nama, bahanList)
       if (!bahan) {
         return {
           fileRow: fr,
@@ -155,7 +159,7 @@ export function VariancePage() {
       const status = cleanVar === 0 ? ("ok" as const) : cleanVar > 0 ? ("lebih" as const) : ("kurang" as const)
       return { fileRow: fr, bahan, calc: { ...calc, variance: cleanVar }, events: eventsMap.get(bahan.id) ?? new Map(), status }
     })
-  }, [fileRows, bahanList, details, dates, sysItems, checkDate, eventsMap])
+  }, [fileRows, bahanList, details, dates, sysItems, checkDate, eventsMap, detectedFormat])
 
   const counts = useMemo(() => {
     const c = { ok: 0, lebih: 0, kurang: 0, unknown: 0 }

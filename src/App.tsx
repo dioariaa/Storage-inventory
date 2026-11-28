@@ -36,8 +36,6 @@ export default function App() {
                   <Route path="barang-keluar" element={<BarangKeluarPage />} />
                   <Route path="produksi" element={<ProduksiPage />} />
                   <Route path="riwayat" element={<RiwayatPage />} />
-                  <Route path="rekap-mutasi" element={<RekapMutasiPage />} />
-                  <Route path="variance" element={<VariancePage />} />
 
                   {/* Admin-only routes */}
                   <Route element={<AdminRoute />}>
@@ -45,6 +43,8 @@ export default function App() {
                     <Route path="bom" element={<BomPage />} />
                     <Route path="menu" element={<MenuPage />} />
                     <Route path="recipe" element={<RecipePage />} />
+                    <Route path="rekap-mutasi" element={<RekapMutasiPage />} />
+                    <Route path="variance" element={<VariancePage />} />
                   </Route>
                 </Route>
               </Route>

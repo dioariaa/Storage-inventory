@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { Outlet, useLocation, useNavigate } from "react-router-dom"
+import { useState } from "react"
+import { Outlet, useNavigate } from "react-router-dom"
 import { Menu, LogOut } from "lucide-react"
 import { Sidebar } from "./Sidebar"
 import { Button } from "@/components/ui/button"
@@ -7,14 +7,8 @@ import { useAuthStore } from "@/stores/authStore"
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const location = useLocation()
   const navigate = useNavigate()
   const { signOut } = useAuthStore()
-
-  // Tutup drawer saat pindah halaman
-  useEffect(() => {
-    setSidebarOpen(false)
-  }, [location.pathname])
 
   const handleSignOut = async () => {
     await signOut()

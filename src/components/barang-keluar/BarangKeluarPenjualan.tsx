@@ -2,14 +2,15 @@ import { useState, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { read as xlsxRead, utils as xlsxUtils } from "xlsx-js-style"
 import { supabase } from "@/lib/supabase"
-import { today, formatNumber } from "@/lib/utils"
+import { today, formatNumber, getErrorMessage } from "@/lib/utils"
 import { useAuthStore } from "@/stores/authStore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Upload, Eye, CheckCircle2, Utensils, AlertTriangle, Coffee } from "lucide-react"
+import { Plus, Trash2, Upload, Eye, CheckCircle2, Utensils, AlertTriangle, Coffee, PackagePlus } from "lucide-react"
+import { QuickRestockModal, type ShortageItem } from "./QuickRestockModal"
 import type { Menu, SaldoBahanBaku, Recipe, BahanBaku } from "@/types/database"
 
 interface SaleItem {
@@ -33,23 +34,34 @@ type Mode = "manual" | "pos"
 
 // Common alias mapping to connect POS names with Master Menu Bar
 const ALIAS_MAP: Record<string, string> = {
-  "dark chocolate": "DARK CHOCOLATE",
-  "mineral water": "MINERAL WATER 600ML",
-  "lemon tea": "LEMON TEA",
-  "teh manis": "ICE TEA MANIS",
-  "caffe latte": "CAFFE LATTE",
-  "butterscotch latte": "BUTTERSCHOTCH LATTE",
-  "lychee tea": "LYCHEE TEA",
-  "wedang uwuh": "WEDANG UWUH",
-  "berlaris palm sugar latte": "BERLARIS PALM SUGAR LATTE/ BOTOL 1 L/500ML/250ML",
-  "cappuccino": "CAPPUCCINO",
-  "es timun serut": "ES TIMUN SERUT",
-  "jus jeruk": "JUS JERUK",
-  "jus stroberi": "JUS STRAWBERRY",
-  "lemon grass tea": "LEMONGRASS TEA",
-  "long black": "LONG BLACK",
-  "matcha lattee": "MATCHA LATTE",
-  "matcha latte": "MATCHA LATTE",
+  "dark chocolate": "Dark Chocolate (Dingin)",
+  "mineral water": "Mineral Water",
+  "air mineral": "Mineral Water",
+  "lemon tea": "Lemon Tea",
+  "teh manis": "Teh Manis",
+  "teh tawar": "Teh Tawar",
+  "caffe latte": "Caffe latte (Dingin)",
+  "butterscotch latte": "Butterscotch Latte (Dingin)",
+  "lychee tea": "Lychee Tea",
+  "wedang uwuh": "Wedang Uwuh",
+  "berlaris palm sugar latte": "Berlaris Palm Sugar Latte (Dingin)",
+  "cappuccino": "Cappuccino (Dingin)",
+  "es timun serut": "Es Timun Serut",
+  "jus jeruk": "Jus Jeruk",
+  "jus stroberi": "Jus Stroberi",
+  "jus strawberry": "Jus Stroberi",
+  "lemon grass tea": "Lemon Grass Tea",
+  "lemongrass tea": "Lemon Grass Tea",
+  "long black": "Long Black",
+  "matcha lattee": "Matcha Lattee (Dingin)",
+  "matcha latte": "Matcha Lattee (Dingin)",
+  "matcha milkshake": "Matcha Milkshake",
+  "caramel macchiato": "CARAMEL MACCHIATO",
+  "tamarind tea": "TAMARIND TEA",
+  "tamarind ice tea": "TAMARIND TEA",
+  "tubruk": "Kopi Tubruk",
+  "chocolate hazelnut": "Coklat Hazelnut (Dingin)",
+  "coklat hazelnut": "Coklat Hazelnut (Dingin)",
 }
 
 // Keywords identifying kitchen / food items to ignore automatically
@@ -70,6 +82,7 @@ export function BarangKeluarPenjualan() {
   const [preview, setPreview] = useState<ConsumptionRow[] | null>(null)
   const [posFilename, setPosFilename] = useState<string>("")
   const [unmapped, setUnmapped] = useState<string[]>([])
+  const [restockOpen, setRestockOpen] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -136,8 +149,29 @@ export function BarangKeluarPenjualan() {
     return inter.size / Math.min(ta.size, tb.size)
   }
 
-  const findBestMenuMatch = (rawName: string): Menu | undefined => {
+  const normalizeVariant = (v: string) => {
+    const low = v.trim().toLowerCase()
+    if (!low) return ""
+    if (low === "hot" || low === "panas") return "Panas"
+    if (low === "ice" || low === "iced" || low === "dingin") return "Dingin"
+    return v.trim()
+  }
+
+  const findBestMenuMatch = (rawName: string, rawVariant = ""): Menu | undefined => {
     if (!menuList || menuList.length === 0) return undefined
+    const vNorm = normalizeVariant(rawVariant)
+
+    // 0. Jika ada kolom varian (mis. Panas/Dingin/Coklat/Vanilla/Strawberry), prioritaskan kecocokan exact dengan varian
+    if (vNorm) {
+      const candidates = [
+        normalize(`${rawName} ${vNorm}`),
+        normalize(`${rawName} (${vNorm})`),
+        normalize(`${rawName} - ${vNorm}`),
+      ]
+      const exactWithVar = menuList.find((x) => candidates.includes(normalize(x.nama)))
+      if (exactWithVar) return exactWithVar
+    }
+
     const n = normalize(rawName)
 
     // 1. Exact
@@ -170,6 +204,7 @@ export function BarangKeluarPenjualan() {
   }
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ""
     if (!file) return
     setPosFilename(file.name)
     setError(null)
@@ -198,24 +233,34 @@ export function BarangKeluarPenjualan() {
           }
         }
 
-        // 2. Cari baris header
+        // 2. Cari baris header (termasuk opsional kolom Varian / Option untuk Panas/Dingin/Rasa)
         let headerRowIdx = -1
         let colMenuIdx = -1
+        let colVariantIdx = -1
         let colQtyIdx = -1
 
         for (let r = 0; r < Math.min(10, rawRows.length); r++) {
           const row = rawRows[r].map((c) => String(c).trim().toLowerCase())
+          let mIdx = -1
+          let vIdx = -1
+          let qIdx = -1
           for (let c = 0; c < row.length; c++) {
             const val = row[c]
-            if (val.includes("judul") || val.includes("produk") || val.includes("menu") || val.includes("item") || val.includes("product")) {
-              if (colMenuIdx === -1) colMenuIdx = c
+            if (val.includes("judul") || val.includes("produk") || val.includes("menu") || val.includes("item") || val.includes("product") || val === "name") {
+              if (mIdx === -1) mIdx = c
+            }
+            if (val.includes("varian") || val.includes("variant") || val.includes("option 1 value") || val === "opsi") {
+              if (vIdx === -1) vIdx = c
             }
             if (val.includes("terjual") || val.includes("unit") || val.includes("qty") || val.includes("jumlah") || val.includes("quantity")) {
-              if (colQtyIdx === -1) colQtyIdx = c
+              if (qIdx === -1) qIdx = c
             }
           }
-          if (colMenuIdx !== -1 && colQtyIdx !== -1) {
+          if (mIdx !== -1 && qIdx !== -1) {
             headerRowIdx = r
+            colMenuIdx = mIdx
+            colVariantIdx = vIdx
+            colQtyIdx = qIdx
             break
           }
         }
@@ -235,12 +280,13 @@ export function BarangKeluarPenjualan() {
           if (!row || row.length === 0) continue
 
           const rawMenuName = String(row[colMenuIdx] || "").trim()
+          const rawVariant = colVariantIdx >= 0 ? String(row[colVariantIdx] || "").trim() : ""
           const rawQty = parseFloat(String(row[colQtyIdx]).replace(",", ".")) || 0
 
           if (!rawMenuName || rawQty <= 0) continue
 
-          // Cari kecocokan di Master Menu (Bar & Kitchen) via fuzzy matching
-          const matchedMenu = findBestMenuMatch(rawMenuName)
+          // Cari kecocokan di Master Menu (Bar & Kitchen) via fuzzy matching + varian
+          const matchedMenu = findBestMenuMatch(rawMenuName, rawVariant)
 
           if (matchedMenu) {
             barSales.push({
@@ -272,8 +318,9 @@ export function BarangKeluarPenjualan() {
     reader.readAsBinaryString(file)
   }
 
-  const calculateConsumption = (): ConsumptionRow[] => {
-    if (!allRecipes || !saldoList) return []
+  const calculateConsumption = (customSaldo?: SaldoBahanBaku[]): ConsumptionRow[] => {
+    const activeSaldo = customSaldo ?? saldoList
+    if (!allRecipes || !activeSaldo) return []
 
     const consumptionMap: Record<string, { qty: number; bahan: BahanBaku }> = {}
 
@@ -291,7 +338,7 @@ export function BarangKeluarPenjualan() {
     }
 
     return Object.entries(consumptionMap).map(([bahan_baku_id, { qty, bahan }]) => {
-      const saldo = saldoList.find((s) => s.id === bahan_baku_id)?.saldo_akhir ?? 0
+      const saldo = activeSaldo.find((s) => s.id === bahan_baku_id)?.saldo_akhir ?? 0
       return {
         bahan_baku_id,
         bahan_baku_nama: bahan?.nama || "Bahan Baku",
@@ -301,6 +348,36 @@ export function BarangKeluarPenjualan() {
         cukup: saldo >= qty,
       }
     }).sort((a, b) => a.bahan_baku_nama.localeCompare(b.bahan_baku_nama))
+  }
+
+  const menusWithoutRecipe = allRecipes
+    ? Array.from(
+        new Set(
+          saleItems
+            .filter((s) => s.menu_id && s.qty_terjual > 0 && !allRecipes.some((r) => r.menu_id === s.menu_id))
+            .map((s) => s.menu_nama)
+        )
+      )
+    : []
+
+  const shortages: ShortageItem[] = (preview ?? [])
+    .filter((p) => !p.cukup)
+    .map((p) => ({
+      bahan_baku_id: p.bahan_baku_id,
+      bahan_baku_nama: p.bahan_baku_nama,
+      satuan: p.satuan,
+      butuh: p.total_qty,
+      saldo: p.saldo_sebelum,
+    }))
+
+  const handleAfterRestock = async () => {
+    setError(null)
+    const { data } = await supabase.from("v_saldo_bahan_baku").select("*")
+    if (data) {
+      const fresh = data as SaldoBahanBaku[]
+      queryClient.setQueryData(["saldo-bahan-baku"], fresh)
+      setPreview(calculateConsumption(fresh))
+    }
   }
 
   const handlePreview = () => {
@@ -321,73 +398,119 @@ export function BarangKeluarPenjualan() {
         throw new Error(`Stok bahan berikut tidak mencukupi: ${invalid.map((i) => i.bahan_baku_nama).join(", ")}`)
       }
 
-      // Simpan header penjualan
-      const { data: penj, error: penjErr } = await supabase
-        .from("penjualan")
-        .insert({
-          tgl_penjualan: tglPenjualan,
-          metode: inputMode === "pos" ? "POS_IMPORT" : "MANUAL",
-          pos_filename: posFilename || null,
-          is_posted: false,
-          created_by: profile?.id,
-        } as any)
-        .select()
-        .single()
-      if (penjErr) throw penjErr
+      const validSales = saleItems.filter((s) => s.menu_id && s.qty_terjual > 0)
+      if (validSales.length === 0) throw new Error("Tidak ada menu terjual yang valid.")
 
-      const penjId = (penj as any).id
+      const totalQty = validSales.reduce((acc, s) => acc + s.qty_terjual, 0)
+      const metode = inputMode === "pos" ? "POS_IMPORT" : "MANUAL"
+      const posImportRef =
+        inputMode === "pos" && posFilename
+          ? `POS:${tglPenjualan}:${posFilename}:${totalQty}:${validSales.length}`
+          : null
+      const catatan = `Penjualan ${inputMode === "pos" ? `POS (${posFilename})` : "Manual"}: ${tglPenjualan}`
 
-      // Simpan detail penjualan
-      const penjDetails = saleItems
-        .filter((s) => s.menu_id && s.qty_terjual > 0)
-        .map((s) => ({
+      // Coba RPC atomik 018 dulu (aman untuk Staff & Admin + anti double-import)
+      const rpcRes = await (supabase as any).rpc("catat_penjualan", {
+        p_tanggal: tglPenjualan,
+        p_metode: metode,
+        p_pos_filename: posFilename || null,
+        p_pos_import_ref: posImportRef,
+        p_catatan: catatan,
+        p_items: validSales.map((s) => ({ menu_id: s.menu_id, qty: s.qty_terjual })),
+      })
+
+      if (rpcRes.error) {
+        const msg = String(rpcRes.error.message ?? "")
+        const missingFn =
+          rpcRes.error.code === "PGRST202" ||
+          rpcRes.error.code === "42883" ||
+          msg.includes("catat_penjualan")
+        if (!missingFn) throw rpcRes.error
+
+        // Fallback standar bila migrasi 018 belum dijalankan
+        if (posImportRef) {
+          const { data: dup } = await supabase
+            .from("transaksi")
+            .select("id")
+            .eq("pos_import_ref", posImportRef)
+            .limit(1)
+          if (dup && dup.length > 0) {
+            throw new Error(
+              `File POS ini sudah pernah di-import sebelumnya (${posImportRef}). Hapus transaksi lama di Riwayat jika ingin import ulang.`
+            )
+          }
+        }
+
+        const nowIso = new Date().toISOString()
+        const { data: penj, error: penjErr } = await supabase
+          .from("penjualan")
+          .insert({
+            tgl_penjualan: tglPenjualan,
+            metode,
+            pos_filename: posFilename || null,
+            catatan,
+            is_posted: true,
+            posted_at: nowIso,
+            created_by: profile?.id,
+          } as any)
+          .select()
+          .single()
+        if (penjErr) throw penjErr
+
+        const penjId = (penj as any).id
+
+        const penjDetails = validSales.map((s) => ({
           penjualan_id: penjId,
           menu_id: s.menu_id,
           qty_terjual: s.qty_terjual,
         }))
+        const { error: pdErr } = await supabase.from("penjualan_detail").insert(penjDetails as any)
+        if (pdErr) throw pdErr
 
-      const { error: pdErr } = await supabase.from("penjualan_detail").insert(penjDetails as any)
-      if (pdErr) throw pdErr
+        const { data: trx, error: trxErr } = await supabase
+          .from("transaksi")
+          .insert({
+            tgl_transaksi: tglPenjualan,
+            jenis: "OUT",
+            sumber: inputMode === "pos" ? "POS_IMPORT" : "MANUAL_SALE",
+            alasan_out: "OPERATIONAL",
+            catatan,
+            is_posted: true,
+            posted_at: nowIso,
+            pos_import_ref: posImportRef,
+            penjualan_id: penjId,
+            created_by: profile?.id,
+          } as any)
+          .select()
+          .single()
+        if (trxErr) throw trxErr
 
-      // Buat transaksi OUT
-      const { data: trx, error: trxErr } = await supabase
-        .from("transaksi")
-        .insert({
-          tgl_transaksi: tglPenjualan,
-          jenis: "OUT",
-          sumber: inputMode === "pos" ? "POS_IMPORT" : "MANUAL_SALE",
-          catatan: `Penjualan ${inputMode === "pos" ? `POS (${posFilename})` : "Manual"}: ${tglPenjualan}`,
-          is_posted: true,
-          posted_at: new Date().toISOString(),
-          penjualan_id: penjId,
-          created_by: profile?.id,
-        } as any)
-        .select()
-        .single()
-      if (trxErr) throw trxErr
+        const trxId = (trx as any).id
 
-      const trxId = (trx as any).id
+        const trxDetails = preview.map((row) => ({
+          transaksi_id: trxId,
+          bahan_baku_id: row.bahan_baku_id,
+          qty: row.total_qty,
+          saldo_sebelum: row.saldo_sebelum,
+          saldo_sesudah: row.saldo_sebelum - row.total_qty,
+        }))
+        const { error: tdErr } = await supabase.from("transaksi_detail").insert(trxDetails as any)
+        if (tdErr) throw tdErr
 
-      // Simpan detail transaksi
-      const trxDetails = preview.map((row) => ({
-        transaksi_id: trxId,
-        bahan_baku_id: row.bahan_baku_id,
-        qty: row.total_qty,
-        saldo_sebelum: row.saldo_sebelum,
-        saldo_sesudah: row.saldo_sebelum - row.total_qty,
-      }))
-      const { error: tdErr } = await supabase.from("transaksi_detail").insert(trxDetails as any)
-      if (tdErr) throw tdErr
-
-      // Update penjualan as posted
-      await supabase
-        .from("penjualan")
-        .update({ is_posted: true, posted_at: new Date().toISOString(), transaksi_id: trxId } as any)
-        .eq("id", penjId)
+        // Best-effort link transaksi_id (bisa ditolak RLS untuk staff sebelum 018; tidak fatal)
+        await supabase
+          .from("penjualan")
+          .update({ transaksi_id: trxId } as any)
+          .eq("id", penjId)
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mutasi"] })
       queryClient.invalidateQueries({ queryKey: ["saldo-bahan-baku"] })
+      queryClient.invalidateQueries({ queryKey: ["mutasi-menu"] })
+      queryClient.invalidateQueries({ queryKey: ["riwayat"] })
+      queryClient.invalidateQueries({ queryKey: ["rekap-mutasi"] })
+      queryClient.invalidateQueries({ queryKey: ["variance-details"] })
       setSuccess(true)
       setSaleItems([])
       setKitchenItems([])
@@ -395,7 +518,7 @@ export function BarangKeluarPenjualan() {
       setPosFilename("")
       setTimeout(() => setSuccess(false), 4000)
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: unknown) => setError(getErrorMessage(e)),
   })
 
   return (
@@ -595,9 +718,18 @@ export function BarangKeluarPenjualan() {
           )}
 
           {saleItems.length > 0 && (
-            <div className="pt-2">
+            <div className="space-y-3 pt-2">
+              {menusWithoutRecipe.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-3 text-xs flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    <b>{menusWithoutRecipe.length} menu belum memiliki resep</b> sehingga bahan bakunya tidak akan terpotong:{" "}
+                    {menusWithoutRecipe.join(", ")}
+                  </span>
+                </div>
+              )}
               <Button type="button" onClick={handlePreview} className="gap-2">
-                <Eye className="h-4 w-4" /> Hitung & Preview Pemotongan Bahan Baku
+                <Eye className="h-4 w-4" /> Hitung &amp; Preview Pemotongan Bahan Baku
               </Button>
             </div>
           )}
@@ -660,6 +792,23 @@ export function BarangKeluarPenjualan() {
               </table>
             </div>
 
+            {shortages.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p className="text-xs text-amber-900">
+                  <b>{shortages.length} bahan baku stoknya kurang</b> untuk memposting penjualan ini. Jika belanja hari ini belum sempat dicatat, gunakan tombol di samping untuk input barang masuk cepat tanpa meninggalkan halaman ini.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  onClick={() => setRestockOpen(true)}
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  Input Barang Masuk Cepat ({shortages.length})
+                </Button>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t">
               <p className="text-xs text-muted-foreground">
                 *Stok hanya akan berkurang di Dashboard setelah Anda menekan tombol Konfirmasi.
@@ -670,7 +819,7 @@ export function BarangKeluarPenjualan() {
                 </Button>
                 <Button
                   onClick={() => postMutation.mutate()}
-                  disabled={postMutation.isPending || preview.some((p) => !p.cukup)}
+                  disabled={postMutation.isPending || shortages.length > 0}
                   className="w-full sm:w-auto bg-green-700 hover:bg-green-800 text-white"
                 >
                   {postMutation.isPending ? "Memposting Transaksi..." : "Konfirmasi & Potong Stok"}
@@ -680,6 +829,14 @@ export function BarangKeluarPenjualan() {
           </CardContent>
         </Card>
       )}
+
+      <QuickRestockModal
+        open={restockOpen}
+        onOpenChange={setRestockOpen}
+        tanggal={tglPenjualan}
+        shortages={shortages}
+        onSuccess={handleAfterRestock}
+      />
     </div>
   )
 }

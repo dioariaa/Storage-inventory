@@ -336,6 +336,54 @@ export function parseOpnameRows(rows: unknown[][]): ParseResult {
     result.push({ nama, stoc, cells });
   }
 
+  // Untuk Form Opname Bar (Opsi 5A): gabungkan 5 baris ARABICA ... menjadi 1 baris BEANS ARABICA (ALL ORIGIN)
+  if (isBarFormat) {
+    const isArabicaRow = (nama: string) => /^arabica\b/i.test(nama.trim());
+    const arabicaRows = result.filter((r) => isArabicaRow(r.nama));
+    if (arabicaRows.length > 1) {
+      const mergedStoc = arabicaRows.reduce((s, r) => s + r.stoc, 0);
+      let chain = mergedStoc;
+      const mergedCells: DateCell[] = validGroups.map((g, gi) => {
+        let mIn = 0;
+        let mOut = 0;
+        let mBal = 0;
+        let mSa = 0;
+        let hasSa = false;
+        let hasBal = false;
+        for (const r of arabicaRows) {
+          const c = r.cells[gi];
+          if (!c) continue;
+          mIn += c.mIn;
+          mOut += c.mOut;
+          if (c.hasBal) {
+            hasBal = true;
+            mBal += c.mBal;
+          }
+          if (c.hasSa && c.mSa !== undefined) {
+            hasSa = true;
+            mSa += c.mSa;
+          }
+        }
+        chain += mIn - mOut;
+        return { date: g.date, mSa: hasSa ? mSa : undefined, hasSa, mIn, mOut, mBal, hasBal, chain };
+      });
+
+      const firstIdx = result.findIndex((r) => isArabicaRow(r.nama));
+      const nonArabica = result.filter((r) => !isArabicaRow(r.nama));
+      nonArabica.splice(firstIdx, 0, {
+        nama: "BEANS ARABICA (ALL ORIGIN)",
+        stoc: mergedStoc,
+        cells: mergedCells,
+      });
+      return {
+        format: "opname_bar",
+        groups: validGroups,
+        rows: nonArabica,
+        error: null,
+      };
+    }
+  }
+
   return {
     format: isBarFormat ? "opname_bar" : "rekap_mutasi",
     groups: validGroups,
@@ -447,6 +495,7 @@ export function computeVariance(
 export function canonicalizeBahanName(raw: string): string {
   return raw
     .toLowerCase()
+    .replace(/\(\s*(bar|kitchen)\s*\)/g, " ") // hilangkan penanda divisi mis. SEREH (BAR), TIMUN (BAR), JAHE (BAR)
     .replace(/@\s*[\d.,]+\s*[a-z]*/g, " ") // hapus kemasan: @1000GR, @750 ML, @2,5GR, @1KG, @100PCS
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9\s]/g, " ")
@@ -467,6 +516,7 @@ export function canonicalizeBahanName(raw: string): string {
     .replace(/\bbotanical\s+water\b/g, "soda water")
     .replace(/\bpapper\b|\bpepper\b/g, "paper")
     .replace(/\btopping\b/g, "sauce")
+    .replace(/\bcharges\b/g, "charger")
     .replace(/\bbutterschotch\b/g, "butterscotch")
     .replace(/\s+/g, " ")
     .trim();
@@ -535,5 +585,5 @@ export function findBahanMatch<T extends { nama: string }>(rawName: string, list
     }
   }
 
-  return bestScore >= 0.65 ? best : undefined;
+  return bestScore >= 0.72 ? best : undefined;
 }

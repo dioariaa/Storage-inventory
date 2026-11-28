@@ -42,6 +42,7 @@ type FormData = z.infer<typeof schema>
 export function BarangKeluarPage() {
   const [mode, setMode] = useState<Mode>("manual")
   const [subMode, setSubMode] = useState<SubMode>("grid")
+  const [divFilter, setDivFilter] = useState<"all" | "bar" | "kitchen">("all")
   const { profile } = useAuthStore()
   const queryClient = useQueryClient()
   const [success, setSuccess] = useState(false)
@@ -58,6 +59,10 @@ export function BarangKeluarPage() {
       return data as BahanBaku[]
     },
   })
+
+  const filteredBahan = (bahanList ?? []).filter(
+    (b) => divFilter === "all" || b.division === divFilter
+  )
 
   const { data: saldoList } = useQuery({
     queryKey: ["saldo-bahan-baku"],
@@ -94,64 +99,85 @@ export function BarangKeluarPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // Agregasi total OUT per bahan dan validasi terhadap saldo fresh di DB
-      const totalByBahan = new Map<string, number>()
-      for (const item of data.items) {
-        totalByBahan.set(item.bahan_baku_id, (totalByBahan.get(item.bahan_baku_id) ?? 0) + item.qty)
-      }
-
-      const freshSaldoMap: Record<string, number> = {}
-      for (const [bahanId, totalQty] of totalByBahan.entries()) {
-        const { data: freshSaldo, error: saldoErr } = await supabase.rpc("get_saldo_bahan", {
-          p_bahan_baku_id: bahanId,
-        } as any)
-        if (saldoErr) throw saldoErr
-        const saldo = Number(freshSaldo ?? 0)
-        freshSaldoMap[bahanId] = saldo
-        if (totalQty > saldo) {
-          throw new Error(
-            `OUT melebihi saldo. Total keluar "${bahanList?.find((b) => b.id === bahanId)?.nama}": ${formatNumber(totalQty)}, saldo tersedia: ${formatNumber(saldo)}`
-          )
-        }
-      }
-
-      const { data: trx, error: trxErr } = await supabase
-        .from("transaksi")
-        .insert({
-          tgl_transaksi: data.tgl_transaksi,
-          jenis: "OUT",
-          sumber: "MANUAL_OUT",
-          alasan_out: data.alasan_out,
-          catatan: data.catatan || null,
-          is_posted: true,
-          posted_at: new Date().toISOString(),
-          created_by: profile?.id,
-        } as any)
-        .select()
-        .single()
-
-      if (trxErr) throw trxErr
-
-      const runningSaldo = { ...freshSaldoMap }
-      const details = data.items.map((item) => {
-        const before = runningSaldo[item.bahan_baku_id]
-        const after = before - item.qty
-        runningSaldo[item.bahan_baku_id] = after
-        return {
-          transaksi_id: (trx as any).id,
-          bahan_baku_id: item.bahan_baku_id,
-          qty: item.qty,
-          saldo_sebelum: before,
-          saldo_sesudah: after,
-        }
+      // Coba RPC atomik 018 dulu; fallback ke insert standar bila belum dijalankan
+      const rpcRes = await (supabase as any).rpc("catat_transaksi_manual", {
+        p_tanggal: data.tgl_transaksi,
+        p_jenis: "OUT",
+        p_alasan_out: data.alasan_out,
+        p_catatan: data.catatan || null,
+        p_items: data.items.map((i) => ({ bahan_baku_id: i.bahan_baku_id, qty: i.qty })),
       })
 
-      const { error: detErr } = await supabase.from("transaksi_detail").insert(details as any)
-      if (detErr) throw detErr
+      if (rpcRes.error) {
+        const msg = String(rpcRes.error.message ?? "")
+        const missingFn =
+          rpcRes.error.code === "PGRST202" ||
+          rpcRes.error.code === "42883" ||
+          msg.includes("catat_transaksi_manual")
+        if (!missingFn) throw rpcRes.error
+
+        // Agregasi total OUT per bahan dan validasi terhadap saldo fresh di DB
+        const totalByBahan = new Map<string, number>()
+        for (const item of data.items) {
+          totalByBahan.set(item.bahan_baku_id, (totalByBahan.get(item.bahan_baku_id) ?? 0) + item.qty)
+        }
+
+        const freshSaldoMap: Record<string, number> = {}
+        for (const [bahanId, totalQty] of totalByBahan.entries()) {
+          const { data: freshSaldo, error: saldoErr } = await supabase.rpc("get_saldo_bahan", {
+            p_bahan_baku_id: bahanId,
+          } as any)
+          if (saldoErr) throw saldoErr
+          const saldo = Number(freshSaldo ?? 0)
+          freshSaldoMap[bahanId] = saldo
+          if (totalQty > saldo) {
+            throw new Error(
+              `OUT melebihi saldo. Total keluar "${bahanList?.find((b) => b.id === bahanId)?.nama}": ${formatNumber(totalQty)}, saldo tersedia: ${formatNumber(saldo)}`
+            )
+          }
+        }
+
+        const { data: trx, error: trxErr } = await supabase
+          .from("transaksi")
+          .insert({
+            tgl_transaksi: data.tgl_transaksi,
+            jenis: "OUT",
+            sumber: "MANUAL_OUT",
+            alasan_out: data.alasan_out,
+            catatan: data.catatan || null,
+            is_posted: true,
+            posted_at: new Date().toISOString(),
+            created_by: profile?.id,
+          } as any)
+          .select()
+          .single()
+
+        if (trxErr) throw trxErr
+
+        const runningSaldo = { ...freshSaldoMap }
+        const details = data.items.map((item) => {
+          const before = runningSaldo[item.bahan_baku_id]
+          const after = before - item.qty
+          runningSaldo[item.bahan_baku_id] = after
+          return {
+            transaksi_id: (trx as any).id,
+            bahan_baku_id: item.bahan_baku_id,
+            qty: item.qty,
+            saldo_sebelum: before,
+            saldo_sesudah: after,
+          }
+        })
+
+        const { error: detErr } = await supabase.from("transaksi_detail").insert(details as any)
+        if (detErr) throw detErr
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mutasi"] })
       queryClient.invalidateQueries({ queryKey: ["saldo-bahan-baku"] })
+      queryClient.invalidateQueries({ queryKey: ["riwayat"] })
+      queryClient.invalidateQueries({ queryKey: ["rekap-mutasi"] })
+      queryClient.invalidateQueries({ queryKey: ["variance-details"] })
       setSuccess(true)
       reset({ tgl_transaksi: today(), alasan_out: "WASTE", catatan: "", items: [{ bahan_baku_id: "", qty: 0 }] })
       setTimeout(() => setSuccess(false), 3000)
@@ -251,9 +277,27 @@ export function BarangKeluarPage() {
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Daftar Bahan Keluar</CardTitle>
-                <CardDescription>Pastikan jumlah tidak melebihi saldo yang tersedia</CardDescription>
+              <CardHeader className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">Daftar Bahan Keluar</CardTitle>
+                    <CardDescription>Pastikan jumlah tidak melebihi saldo yang tersedia</CardDescription>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {(["all", "bar", "kitchen"] as const).map((d) => (
+                      <Button
+                        key={d}
+                        type="button"
+                        size="sm"
+                        variant={divFilter === d ? "default" : "outline"}
+                        className="h-8 text-xs"
+                        onClick={() => setDivFilter(d)}
+                      >
+                        {d === "all" ? "Semua" : d === "bar" ? "Bar" : "Kitchen"}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {fields.map((field, index) => {
@@ -268,7 +312,7 @@ export function BarangKeluarPage() {
                           <SearchableSelect
                             value={selectedId ?? ""}
                             onChange={(v) => setValue(`items.${index}.bahan_baku_id`, v, { shouldValidate: true })}
-                            options={(bahanList ?? []).map((b) => ({ id: b.id, label: b.nama, hint: b.satuan }))}
+                            options={filteredBahan.map((b) => ({ id: b.id, label: b.nama, hint: b.satuan }))}
                             placeholder="Pilih bahan baku..."
                             emptyText="Bahan baku tidak ditemukan"
                           />

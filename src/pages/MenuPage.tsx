@@ -192,8 +192,8 @@ export function MenuPage() {
 
       {/* Filter Bar */}
       <Card>
-        <CardContent className="p-4 sm:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 max-w-sm">
+        <CardContent className="p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Cari nama menu..."
@@ -323,16 +323,28 @@ export function MenuPage() {
                           </Badge>
                         </td>
                         {isAdmin && (
-                          <td className="px-4 py-3 text-right">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2 text-muted-foreground hover:text-foreground"
-                              onClick={() => openEdit(m)}
-                              aria-label={`Edit ${m.nama}`}
-                            >
-                              <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-                            </Button>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                                onClick={() => openEdit(m)}
+                                aria-label={`Edit ${m.nama}`}
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(m)}
+                                disabled={deleteMutation.isPending}
+                                aria-label={`Hapus ${m.nama}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Hapus
+                              </Button>
+                            </div>
                           </td>
                         )}
                       </tr>

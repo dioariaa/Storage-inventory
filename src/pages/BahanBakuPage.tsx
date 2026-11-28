@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/authStore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -224,8 +224,8 @@ export function BahanBakuPage() {
 
       {/* Filter Bar */}
       <Card>
-        <CardContent className="p-4 sm:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 max-w-sm">
+        <CardContent className="p-4 sm:p-5 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Cari nama bahan atau satuan..."
@@ -316,7 +316,7 @@ export function BahanBakuPage() {
                 {isLoading
                   ? Array.from({ length: 4 }).map((_, i) => (
                       <tr key={i}>
-                        {Array.from({ length: 8 }).map((_, j) => (
+                        {Array.from({ length: isAdmin ? 11 : 10 }).map((_, j) => (
                           <td key={j} className="px-4 py-3">
                             <Skeleton className="h-4 w-full" />
                           </td>
@@ -325,11 +325,11 @@ export function BahanBakuPage() {
                     ))
                   : sorted.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
+                        <td colSpan={isAdmin ? 11 : 10} className="px-4 py-12 text-center text-muted-foreground">
                           Tidak ada bahan baku yang cocok dengan pencarian.
                         </td>
                       </tr>
-                    )                    : sorted.map((b) => {
+                    ) : sorted.map((b) => {
                         const menus = usageMap[b.id] ?? []
                         return (
                       <tr key={b.id} className="hover:bg-muted/30 transition-colors">

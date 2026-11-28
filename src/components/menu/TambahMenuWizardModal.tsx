@@ -1,7 +1,8 @@
-import React, { useState } from "react"
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/stores/authStore"
+import { getErrorMessage } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +32,8 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
 
   // Form states
   const [namaMenu, setNamaMenu] = useState("")
+  const [division, setDivision] = useState<"bar" | "kitchen">("bar")
+  const [harga, setHarga] = useState("")
   const [kategori, setKategori] = useState("Kopi")
   const [customKategori, setCustomKategori] = useState("")
   const [items, setItems] = useState<RecipeItemState[]>([
@@ -63,6 +66,8 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
 
   const resetForm = () => {
     setNamaMenu("")
+    setDivision("bar")
+    setHarga("")
     setKategori("Kopi")
     setCustomKategori("")
     setItems([
@@ -78,6 +83,11 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
     ])
     setErrorMsg(null)
     setSuccessMsg(false)
+  }
+
+  const handleDialogChange = (nextOpen: boolean) => {
+    if (!nextOpen) resetForm()
+    onOpenChange(nextOpen)
   }
 
   const handleAddItem = () => {
@@ -115,6 +125,7 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
         throw new Error("Minimal harus ada 1 bahan baku dalam resep menu.")
       }
 
+      const seenExisting = new Set<string>()
       for (let i = 0; i < items.length; i++) {
         const it = items[i]
         if (it.isNewBahan) {
@@ -128,6 +139,10 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
           if (!it.bahanBakuId) {
             throw new Error(`Silakan pilih Bahan Baku pada baris ke-${i + 1} atau centang Buat Bahan Baru.`)
           }
+          if (seenExisting.has(it.bahanBakuId)) {
+            throw new Error(`Bahan baku pada baris ke-${i + 1} duplikat. Gabungkan takarannya pada satu baris.`)
+          }
+          seenExisting.add(it.bahanBakuId)
         }
         if (!it.qty || it.qty <= 0) {
           throw new Error(`Takaran porsi (Qty) pada baris ke-${i + 1} harus lebih dari 0.`)
@@ -148,7 +163,7 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
               satuan: it.newBahanSatuan.trim(),
               stok_awal: Number(it.newBahanStokAwal) || 0,
               minimum_stok: it.newBahanMinStok !== "" ? Number(it.newBahanMinStok) : null,
-              division: "bar",
+              division,
               is_active: true,
               created_by: profile?.id,
             } as any)
@@ -169,12 +184,14 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
       }
 
       // 3. Buat menu baru
+      const parsedHarga = harga.trim() === "" ? null : Number(harga)
       const { data: newMenu, error: menuErr } = await supabase
         .from("menu")
         .insert({
           nama: namaMenu.trim(),
           kategori: finalKategori || null,
-          division: "bar",
+          harga: parsedHarga !== null && !Number.isNaN(parsedHarga) && parsedHarga >= 0 ? parsedHarga : null,
+          division,
           is_active: true,
           created_by: profile?.id,
         } as any)
@@ -213,13 +230,13 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
         onOpenChange(false)
       }, 1500)
     },
-    onError: (err: any) => {
-      setErrorMsg(err.message || String(err))
+    onError: (err: unknown) => {
+      setErrorMsg(getErrorMessage(err))
     },
   })
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
@@ -275,6 +292,32 @@ export function TambahMenuWizardModal({ open, onOpenChange }: TambahMenuWizardMo
                   <option value="Mocktail">Mocktail</option>
                   <option value="Lainnya">Kategori Lainnya...</option>
                 </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="wizardDivision">Divisi *</Label>
+                <select
+                  id="wizardDivision"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={division}
+                  onChange={(e) => setDivision(e.target.value as "bar" | "kitchen")}
+                >
+                  <option value="bar">Bar</option>
+                  <option value="kitchen">Kitchen</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="wizardHarga">Harga Jual (Rp)</Label>
+                <Input
+                  id="wizardHarga"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Contoh: 32000"
+                  value={harga}
+                  onChange={(e) => setHarga(e.target.value)}
+                />
               </div>
 
               {kategori === "Lainnya" && (

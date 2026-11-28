@@ -3,6 +3,7 @@ import { useState } from "react"
 import { supabase, fetchAllRows } from "@/lib/supabase"
 import { formatDate, formatNumber, today, daysAgo, cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -13,6 +14,7 @@ import { PageHeader } from "@/components/common/PageHeader"
 export function DashboardPage() {
   const [dateFrom, setDateFrom] = useState(() => daysAgo(30))
   const [dateTo, setDateTo] = useState(today)
+  const [divisionFilter, setDivisionFilter] = useState<"all" | "bar" | "kitchen">("all")
   const [viewMode, setViewMode] = useState<"bahan" | "menu">("bahan")
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -74,21 +76,34 @@ export function DashboardPage() {
     },
   })
   const divisionMap = new Map(menuDivisions?.map(m => [m.id, m.division] as [string, string]) ?? [])
+  const bahanDivMap = new Map(saldoList?.map(s => [s.id, s.division] as [string, string]) ?? [])
+
+  const filteredSaldo = saldoList?.filter(
+    (s) => divisionFilter === "all" || s.division === divisionFilter
+  )
+
+  const mutasiByDivision = mutasi?.filter(
+    (m) => divisionFilter === "all" || bahanDivMap.get(m.bahan_baku_id) === divisionFilter
+  )
+
+  const mutasiMenuByDivision = mutasiMenu?.filter(
+    (m) => divisionFilter === "all" || divisionMap.get(m.menu_id) === divisionFilter
+  )
 
   // Filter mutasi by search string
-  const filteredMutasi = mutasi?.filter(m =>
+  const filteredMutasi = mutasiByDivision?.filter(m =>
     m.bahan_baku_nama.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const filteredMutasiMenu = mutasiMenu?.filter(m =>
+  const filteredMutasiMenu = mutasiMenuByDivision?.filter(m =>
     m.menu_nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (m.menu_kategori && m.menu_kategori.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
   // Hitung ringkasan
-  const totalIn = mutasi?.reduce((s, m) => s + (m.jenis === "IN" ? m.qty : 0), 0) ?? 0
-  const totalOut = mutasi?.reduce((s, m) => s + (m.jenis === "OUT" ? m.qty : 0), 0) ?? 0
-  const bahanMinimum = saldoList?.filter(
+  const totalIn = mutasiByDivision?.reduce((s, m) => s + (m.jenis === "IN" ? m.qty : 0), 0) ?? 0
+  const totalOut = mutasiByDivision?.reduce((s, m) => s + (m.jenis === "OUT" ? m.qty : 0), 0) ?? 0
+  const bahanMinimum = filteredSaldo?.filter(
     (s) => s.minimum_stok !== null && s.minimum_stok > 0 && s.saldo_akhir <= s.minimum_stok
   )
 
@@ -98,11 +113,26 @@ export function DashboardPage() {
         icon={LayoutDashboard}
         title="Dashboard"
         description="Monitoring stok, barang masuk, dan penggunaan bahan baku"
-      />
+      >
+        <div className="flex items-center gap-1.5" role="group" aria-label="Filter divisi dashboard">
+          {(["all", "bar", "kitchen"] as const).map((div) => (
+            <Button
+              key={div}
+              type="button"
+              size="sm"
+              variant={divisionFilter === div ? "default" : "outline"}
+              className="h-9 text-xs"
+              onClick={() => setDivisionFilter(div)}
+            >
+              {div === "all" ? "Semua Divisi" : div === "bar" ? "Bar" : "Kitchen"}
+            </Button>
+          ))}
+        </div>
+      </PageHeader>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Bahan Aktif" value={saldoList?.length} unit="jenis" icon={Archive} />
+        <StatCard title="Bahan Aktif" value={filteredSaldo?.length} unit="jenis" icon={Archive} />
         <StatCard title="Total IN" value={totalIn} unit="unit" icon={PackagePlus} color="green" />
         <StatCard title="Total OUT" value={totalOut} unit="unit" icon={PackageMinus} color="red" />
         <StatCard title="Stok Menipis" value={bahanMinimum?.length} unit="bahan" icon={AlertTriangle} color="amber" />
@@ -130,8 +160,8 @@ export function DashboardPage() {
         {/* Left: Filter & Table */}
         <div className="xl:col-span-2 space-y-6">
           <Card>
-            <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
-              <div className="relative flex-1 w-full">
+            <CardContent className="p-4 sm:p-5 flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder={viewMode === "bahan" ? "Cari pergerakan bahan..." : "Cari menu terjual..."}
@@ -140,7 +170,7 @@ export function DashboardPage() {
                   className="pl-9 h-10"
                 />
               </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex bg-muted p-1 rounded-md shrink-0">
                   <button
                     onClick={() => { setViewMode("bahan"); setSearchQuery(""); }}
@@ -155,19 +185,21 @@ export function DashboardPage() {
                     Mutasi Menu
                   </button>
                 </div>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="h-10 text-xs sm:text-sm w-36"
-                />
-                <span className="text-muted-foreground">-</span>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="h-10 text-xs sm:text-sm w-36"
-                />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="h-10 text-xs sm:text-sm w-36"
+                  />
+                  <span className="text-muted-foreground">-</span>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="h-10 text-xs sm:text-sm w-36"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -335,12 +367,15 @@ export function DashboardPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader className="py-4 border-b bg-muted/30">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider">Saldo Aktual</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold uppercase tracking-wider">Saldo Aktual</CardTitle>
+                <Badge variant="outline">{filteredSaldo?.length ?? 0} bahan</Badge>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="max-h-[640px] overflow-y-auto">
                 <div className="divide-y">
-                  {saldoList?.map((s) => (
+                  {filteredSaldo?.map((s) => (
                     <div key={s.id} className="p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
                       <div>
                         <p className="text-sm font-medium">{s.nama}</p>

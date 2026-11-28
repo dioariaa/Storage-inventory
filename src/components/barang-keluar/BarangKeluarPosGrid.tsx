@@ -1,13 +1,14 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
-import { today, formatNumber, formatRupiah, cn } from "@/lib/utils"
+import { today, formatNumber, formatRupiah, getErrorMessage, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Plus, Minus, Eye, Trash2, Coffee, ChefHat, LayoutGrid, PackageOpen, ShoppingBag, CalendarDays } from "lucide-react"
+import { Search, Plus, Minus, Eye, Trash2, Coffee, ChefHat, LayoutGrid, PackageOpen, ShoppingBag, CalendarDays, PackagePlus, AlertTriangle } from "lucide-react"
 import { useAuthStore } from "@/stores/authStore"
+import { QuickRestockModal, type ShortageItem } from "./QuickRestockModal"
 import type { Menu, SaldoBahanBaku, Recipe, BahanBaku } from "@/types/database"
 
 export function BarangKeluarPosGrid() {
@@ -19,6 +20,7 @@ export function BarangKeluarPosGrid() {
   const [searchQuery, setSearchQuery] = useState("")
   const [cart, setCart] = useState<Record<string, number>>({}) // menu_id -> qty
   const [preview, setPreview] = useState<any[] | null>(null)
+  const [restockOpen, setRestockOpen] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -83,8 +85,9 @@ export function BarangKeluarPosGrid() {
     setPreview(null)
   }
 
-  const calculateConsumption = () => {
-    if (!allRecipes || !saldoList) return []
+  const calculateConsumption = (customSaldo?: SaldoBahanBaku[]) => {
+    const activeSaldo = customSaldo ?? saldoList
+    if (!allRecipes || !activeSaldo) return []
     const consumptionMap: Record<string, { qty: number; bahan: BahanBaku }> = {}
 
     for (const [menuId, qtyTerjual] of Object.entries(cart)) {
@@ -100,7 +103,7 @@ export function BarangKeluarPosGrid() {
 
     const rows: any[] = []
     for (const [bahanId, val] of Object.entries(consumptionMap)) {
-      const saldo = saldoList.find((s) => s.id === bahanId)?.saldo_akhir ?? 0
+      const saldo = activeSaldo.find((s) => s.id === bahanId)?.saldo_akhir ?? 0
       rows.push({
         bahan_baku_id: bahanId,
         bahan_baku_nama: val.bahan.nama,
@@ -111,6 +114,26 @@ export function BarangKeluarPosGrid() {
       })
     }
     return rows
+  }
+
+  const shortages: ShortageItem[] = (preview ?? [])
+    .filter((r) => !r.cukup)
+    .map((r) => ({
+      bahan_baku_id: r.bahan_baku_id,
+      bahan_baku_nama: r.bahan_baku_nama,
+      satuan: r.satuan,
+      butuh: r.total_qty,
+      saldo: r.saldo_sebelum,
+    }))
+
+  const handleAfterRestock = async () => {
+    setError(null)
+    const { data } = await supabase.from("v_saldo_bahan_baku").select("*")
+    if (data) {
+      const fresh = data as SaldoBahanBaku[]
+      queryClient.setQueryData(["saldo-bahan-baku"], fresh)
+      setPreview(calculateConsumption(fresh))
+    }
   }
 
   const handlePreview = () => {
@@ -130,66 +153,99 @@ export function BarangKeluarPosGrid() {
         throw new Error("Stok bahan baku tidak mencukupi untuk transaksi ini.")
       }
 
-      const { data: penjualan, error: penError } = await supabase
-        .from("penjualan")
-        .insert({
-          tgl_penjualan: tglPenjualan,
-          metode: "MANUAL",
-          catatan: "POS Grid Manual Sale",
-          is_posted: true,
-          created_by: profile?.id,
-        })
-        .select()
-        .single()
-      if (penError) throw penError
+      const items = Object.entries(cart)
+        .filter(([, qty]) => qty > 0)
+        .map(([menu_id, qty]) => ({ menu_id, qty }))
+      const catatan = `Penjualan POS Grid Manual (${items.length} item)`
 
-      const saleDetails = Object.entries(cart).map(([menuId, qty]) => ({
-        penjualan_id: penjualan.id,
-        menu_id: menuId,
-        qty_terjual: qty,
-      }))
-      const { error: detError } = await supabase.from("penjualan_detail").insert(saleDetails)
-      if (detError) throw detError
+      // Coba RPC atomik 018 dulu; fallback ke insert standar bila belum dijalankan
+      const rpcRes = await (supabase as any).rpc("catat_penjualan", {
+        p_tanggal: tglPenjualan,
+        p_metode: "MANUAL",
+        p_pos_filename: null,
+        p_pos_import_ref: null,
+        p_catatan: catatan,
+        p_items: items,
+      })
 
-      const { data: trx, error: trxError } = await supabase
-        .from("transaksi")
-        .insert({
-          tgl_transaksi: tglPenjualan,
-          jenis: "OUT",
-          sumber: "MANUAL_SALE",
-          alasan_out: "OPERATIONAL",
-          catatan: `Penjualan POS Grid Manual (${Object.keys(cart).length} item)`,
-          is_posted: true,
+      if (rpcRes.error) {
+        const msg = String(rpcRes.error.message ?? "")
+        const missingFn =
+          rpcRes.error.code === "PGRST202" ||
+          rpcRes.error.code === "42883" ||
+          msg.includes("catat_penjualan")
+        if (!missingFn) throw rpcRes.error
+
+        const nowIso = new Date().toISOString()
+        const { data: penjualan, error: penError } = await supabase
+          .from("penjualan")
+          .insert({
+            tgl_penjualan: tglPenjualan,
+            metode: "MANUAL",
+            catatan,
+            is_posted: true,
+            posted_at: nowIso,
+            created_by: profile?.id,
+          })
+          .select()
+          .single()
+        if (penError) throw penError
+
+        const saleDetails = items.map((it) => ({
           penjualan_id: penjualan.id,
-          created_by: profile?.id,
-        })
-        .select()
-        .single()
-      if (trxError) throw trxError
+          menu_id: it.menu_id,
+          qty_terjual: it.qty,
+        }))
+        const { error: detError } = await supabase.from("penjualan_detail").insert(saleDetails)
+        if (detError) throw detError
 
-      for (const row of rows) {
-        const saldoSebelum = row.saldo_sebelum
-        const saldoSesudah = saldoSebelum - row.total_qty
-        const { error: tdError } = await supabase.from("transaksi_detail").insert({
-          transaksi_id: trx.id,
-          bahan_baku_id: row.bahan_baku_id,
-          qty: row.total_qty,
-          saldo_sebelum: saldoSebelum,
-          saldo_sesudah: saldoSesudah,
-        })
+        const { data: trx, error: trxError } = await supabase
+          .from("transaksi")
+          .insert({
+            tgl_transaksi: tglPenjualan,
+            jenis: "OUT",
+            sumber: "MANUAL_SALE",
+            alasan_out: "OPERATIONAL",
+            catatan,
+            is_posted: true,
+            posted_at: nowIso,
+            penjualan_id: penjualan.id,
+            created_by: profile?.id,
+          })
+          .select()
+          .single()
+        if (trxError) throw trxError
+
+        const { error: tdError } = await supabase.from("transaksi_detail").insert(
+          rows.map((row) => ({
+            transaksi_id: trx.id,
+            bahan_baku_id: row.bahan_baku_id,
+            qty: row.total_qty,
+            saldo_sebelum: row.saldo_sebelum,
+            saldo_sesudah: row.saldo_sebelum - row.total_qty,
+          }))
+        )
         if (tdError) throw tdError
+
+        await supabase
+          .from("penjualan")
+          .update({ transaksi_id: trx.id } as any)
+          .eq("id", penjualan.id)
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["saldo-bahan-baku"] })
       queryClient.invalidateQueries({ queryKey: ["mutasi"] })
       queryClient.invalidateQueries({ queryKey: ["mutasi-menu"] })
+      queryClient.invalidateQueries({ queryKey: ["riwayat"] })
+      queryClient.invalidateQueries({ queryKey: ["rekap-mutasi"] })
+      queryClient.invalidateQueries({ queryKey: ["variance-details"] })
       setSuccess(true)
       setCart({})
       setPreview(null)
     },
-    onError: (err: any) => {
-      setError(err.message)
+    onError: (err: unknown) => {
+      setError(getErrorMessage(err))
     },
   })
 
@@ -204,6 +260,11 @@ export function BarangKeluarPosGrid() {
   const totalItemCount = cartItems.reduce((a, b) => a + b.qty, 0)
   const totalHarga = cartItems.reduce((a, b) => a + b.subtotal, 0)
   const totalKonsumsi = preview?.reduce((a, b) => a + Number(b.total_qty), 0) ?? 0
+  const cartWithoutRecipe = allRecipes
+    ? cartItems
+        .filter(({ menu }) => !allRecipes.some((r) => r.menu_id === menu.id))
+        .map(({ menu }) => menu.nama)
+    : []
 
   const divisionTabs: { key: "all" | "bar" | "kitchen"; label: string; icon: any }[] = [
     { key: "all", label: "Semua Divisi", icon: LayoutGrid },
@@ -324,9 +385,9 @@ export function BarangKeluarPosGrid() {
           </div>
         </div>
 
-        {/* Grid katalog — minmax supaya card tidak mengecil */}
+        {/* Grid katalog — minmax supaya card tidak mengecil di tablet/laptop 1024px */}
         <div
-          className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+          className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
           aria-busy={loadingMenu}
         >
           {loadingMenu ? (
@@ -499,6 +560,13 @@ export function BarangKeluarPosGrid() {
             <span className="text-primary tabular-nums">{formatRupiah(totalHarga)}</span>
           </div>
 
+          {cartWithoutRecipe.length > 0 && (
+            <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-800 flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>Menu belum ada resep: {cartWithoutRecipe.join(", ")}</span>
+            </div>
+          )}
+
           <Button
             type="button"
             onClick={handlePreview}
@@ -534,10 +602,21 @@ export function BarangKeluarPosGrid() {
                   </span>
                 </div>
               ))}
+              {shortages.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-10 text-xs gap-1.5 border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                  onClick={() => setRestockOpen(true)}
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  Input Barang Masuk Cepat ({shortages.length} kurang)
+                </Button>
+              )}
               <Button
                 type="button"
                 className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold"
-                disabled={preview.some((r) => !r.cukup) || postMutation.isPending}
+                disabled={shortages.length > 0 || postMutation.isPending}
                 onClick={() => postMutation.mutate()}
               >
                 {postMutation.isPending ? "Memproses..." : "Konfirmasi & Post Transaksi"}
@@ -546,6 +625,14 @@ export function BarangKeluarPosGrid() {
           )}
         </div>
       </aside>
+
+      <QuickRestockModal
+        open={restockOpen}
+        onOpenChange={setRestockOpen}
+        tanggal={tglPenjualan}
+        shortages={shortages}
+        onSuccess={handleAfterRestock}
+      />
 
       {/* Bar ringkas pesanan — mobile only */}
       {cartItems.length > 0 && (

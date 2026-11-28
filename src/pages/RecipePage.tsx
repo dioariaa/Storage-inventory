@@ -18,6 +18,7 @@ import { Plus, Trash2, BookOpen, Pencil, Sparkles, Search } from "lucide-react"
 import { formatNumber, getErrorMessage } from "@/lib/utils"
 import type { Menu, BahanBaku, Recipe } from "@/types/database"
 import { TambahMenuWizardModal } from "@/components/menu/TambahMenuWizardModal"
+import { PageHeader } from "@/components/common/PageHeader"
 
 const schema = z.object({
   menu_id: z.string().min(1, "Pilih menu"),
@@ -114,6 +115,16 @@ export function RecipePage() {
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
+      // Validasi tidak ada bahan duplikat SEBELUM menghapus resep lama
+      const seen = new Set<string>()
+      for (const item of data.items) {
+        if (seen.has(item.bahan_baku_id)) {
+          const nama = bahanList?.find((b) => b.id === item.bahan_baku_id)?.nama ?? "bahan yang sama"
+          throw new Error(`Bahan "${nama}" dipilih lebih dari 1 kali. Gabungkan jumlahnya pada satu baris.`)
+        }
+        seen.add(item.bahan_baku_id)
+      }
+
       // Delete existing recipes for this menu first
       const { error: delErr } = await supabase.from("recipe").delete().eq("menu_id", data.menu_id)
       if (delErr) throw delErr
@@ -179,28 +190,25 @@ export function RecipePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-primary" />
-            Recipe
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">Komposisi bahan baku per menu</p>
-        </div>
+      <PageHeader
+        icon={BookOpen}
+        title="Recipe"
+        description="Komposisi bahan baku per menu"
+      >
         {isAdmin && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={openCreate} disabled={!menuTanpaRecipe?.length}>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={openCreate} disabled={!menuTanpaRecipe?.length} className="h-9">
               <Plus className="h-4 w-4 mr-1" /> Set Recipe ({menuTanpaRecipe?.length ?? 0} menu)
             </Button>
-            <Button onClick={() => setWizardOpen(true)} className="gap-1.5">
-              <Sparkles className="h-4 w-4 text-amber-300" /> Tambah Menu & Resep
+            <Button onClick={() => setWizardOpen(true)} className="h-9 gap-1.5">
+              <Sparkles className="h-4 w-4 text-amber-300" /> Tambah Menu &amp; Resep
             </Button>
           </div>
         )}
-      </div>
+      </PageHeader>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 min-w-0">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px]">
           <Search
             className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground pointer-events-none"
             aria-hidden="true"
@@ -214,7 +222,7 @@ export function RecipePage() {
             aria-label="Cari menu pada recipe"
           />
         </div>
-        <div className="w-full sm:w-44 shrink-0">
+        <div className="w-full sm:w-40 shrink-0">
           <Select
             value={filterDivision}
             onValueChange={(v) => { setFilterDivision(v); setFilterKategori("all"); setFilterMenuId("all") }}
@@ -229,7 +237,7 @@ export function RecipePage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="w-full sm:w-48 shrink-0">
+        <div className="w-full sm:w-44 shrink-0">
           <Select
             value={filterKategori}
             onValueChange={(v) => { setFilterKategori(v); setFilterMenuId("all") }}
@@ -245,7 +253,7 @@ export function RecipePage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="w-full sm:w-64 shrink-0">
+        <div className="w-full sm:w-52 shrink-0">
           <Select value={filterMenuId} onValueChange={setFilterMenuId}>
             <SelectTrigger className="h-11">
               <SelectValue placeholder="Semua Menu" />
@@ -373,32 +381,39 @@ export function RecipePage() {
             <div className="space-y-2">
               <Label>Bahan Baku per Porsi</Label>
               {fields.map((field, index) => (
-                <div key={field.id} className="flex gap-2 items-center">
-                  <div className="flex-1">
-                    <SearchableSelect
-                      value={watchedItems[index]?.bahan_baku_id ?? ""}
-                      onChange={(v) => setValue(`items.${index}.bahan_baku_id`, v)}
-                      options={(bahanList ?? []).map((b) => ({ id: b.id, label: b.nama, hint: b.satuan }))}
-                      placeholder="Pilih bahan..."
-                      emptyText="Bahan tidak ditemukan"
-                    />
+                <div key={field.id} className="space-y-1">
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <SearchableSelect
+                        value={watchedItems[index]?.bahan_baku_id ?? ""}
+                        onChange={(v) => setValue(`items.${index}.bahan_baku_id`, v, { shouldValidate: true })}
+                        options={(bahanList ?? []).map((b) => ({ id: b.id, label: b.nama, hint: b.satuan }))}
+                        placeholder="Pilih bahan..."
+                        emptyText="Bahan tidak ditemukan"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 w-32">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="0"
+                        {...register(`items.${index}.qty`)}
+                      />
+                      <span className="text-xs text-muted-foreground w-10 shrink-0">
+                        {getSatuan(watchedItems[index]?.bahan_baku_id)}
+                      </span>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="text-destructive"
+                      onClick={() => remove(index)} disabled={fields.length === 1}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-1 w-32">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="0"
-                      {...register(`items.${index}.qty`)}
-                    />
-                    <span className="text-xs text-muted-foreground w-10 shrink-0">
-                      {getSatuan(watchedItems[index]?.bahan_baku_id)}
-                    </span>
-                  </div>
-                  <Button type="button" variant="ghost" size="icon" className="text-destructive"
-                    onClick={() => remove(index)} disabled={fields.length === 1}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {(errors.items?.[index]?.bahan_baku_id || errors.items?.[index]?.qty) && (
+                    <p className="text-xs text-destructive">
+                      {errors.items[index]?.bahan_baku_id?.message ?? errors.items[index]?.qty?.message}
+                    </p>
+                  )}
                 </div>
               ))}
               <Button type="button" variant="outline" size="sm"
