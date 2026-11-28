@@ -21,8 +21,10 @@ import * as XLSX from "xlsx-js-style"
 import {
   readUploadFile,
   computeVariance,
+  findBahanMatch,
   type DateGroup,
   type FileRow,
+  type OpnameFormat,
   type SysItem,
   type VarianceCalc,
 } from "@/lib/varianceCheck"
@@ -43,40 +45,6 @@ interface RowResult {
   status: "ok" | "lebih" | "kurang" | "unknown"
 }
 
-const normalize = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/-/g, " ")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-
-const tokenScore = (a: string, b: string) => {
-  const ta = new Set(normalize(a).split(" "))
-  const tb = new Set(normalize(b).split(" "))
-  const inter = new Set([...ta].filter((x) => tb.has(x)))
-  return inter.size / Math.min(ta.size, tb.size)
-}
-
-const findBahan = (nama: string, list: BahanBaku[]): BahanBaku | undefined => {
-  const n = normalize(nama)
-  let m = list.find((b) => normalize(b.nama) === n)
-  if (m) return m
-  m = list.find((b) => normalize(b.nama).includes(n) || n.includes(normalize(b.nama)))
-  if (m) return m
-  let best: BahanBaku | undefined
-  let bestScore = 0
-  for (const b of list) {
-    const sc = tokenScore(nama, b.nama)
-    if (sc > bestScore) {
-      bestScore = sc
-      best = b
-    }
-  }
-  return bestScore >= 0.5 ? best : undefined
-}
-
 const fmtDate = (iso: string) => {
   const p = iso.split("-")
   return `${p[2]}/${p[1]}/${p[0]}`
@@ -87,6 +55,7 @@ const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).repla
 export function VariancePage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState("")
+  const [detectedFormat, setDetectedFormat] = useState<OpnameFormat | null>(null)
   const [dateGroups, setDateGroups] = useState<DateGroup[]>([])
   const [fileRows, setFileRows] = useState<FileRow[]>([])
   const [checkDate, setCheckDate] = useState("")
@@ -124,6 +93,7 @@ export function VariancePage() {
       alert(res.error)
       return
     }
+    setDetectedFormat(res.format)
     setDateGroups(res.groups)
     setFileRows(res.rows)
     setCheckDate(res.groups[res.groups.length - 1].date)
@@ -169,7 +139,7 @@ export function VariancePage() {
   const rows: RowResult[] = useMemo(() => {
     if (!fileRows.length || !bahanList || !details) return []
     return fileRows.map((fr) => {
-      const bahan = findBahan(fr.nama, bahanList)
+      const bahan = findBahanMatch(fr.nama, bahanList)
       if (!bahan) {
         return {
           fileRow: fr,
@@ -393,12 +363,17 @@ export function VariancePage() {
 
       <Card>
         <CardContent className="p-4 sm:p-5 space-y-4">
-          <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleUpload} />
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleUpload} />
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={() => fileRef.current?.click()} className="gap-2">
               <Upload className="h-4 w-4" /> Upload File Opname
             </Button>
             {fileName && <span className="text-sm text-muted-foreground truncate">{fileName}</span>}
+            {detectedFormat && (
+              <Badge variant="secondary" className="text-[11px]">
+                {detectedFormat === "opname_bar" ? "Format: Opname Bar (S-A / IN / OUT / BLC)" : "Format: Rekap Mutasi"}
+              </Badge>
+            )}
             {rows.length > 0 && (
               <Button variant="outline" onClick={exportExcel} className="gap-2 ml-auto">
                 <FileDown className="h-4 w-4" /> Export Hasil
@@ -433,8 +408,9 @@ export function VariancePage() {
           )}
 
           <p className="text-xs text-muted-foreground">
-            Format file = export dari halaman Rekap Mutasi. Isi kolom <b>Balance</b> dengan hitungan fisik, atau isi kolom{" "}
-            <b>IN/OUT</b> sesuai arus fisik. Sistem membandingkan per tanggal dan menampilkan selisih.
+            Mendukung format <b>export Rekap Mutasi</b> (<code>IN / OUT / Balance</code>) maupun <b>Form Opname Bar</b>{" "}
+            (<code>S-A / IN / OUT / BLC</code> dengan tanggal di baris <code>TGL :</code> di-merge 4 kolom). Isi kolom{" "}
+            <b>Balance / BLC</b> dengan hitungan fisik, atau isi <b>IN/OUT</b> sesuai arus fisik.
           </p>
 
           {rows.length > 0 && (
